@@ -1,55 +1,72 @@
-// src/pages/LoginPage.jsx
-import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useState, useMemo } from "react";
+import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
+const isEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v || "");
+
 export default function LoginPage() {
-  const navigate = useNavigate();
-  const { login, submitting, error, setError, user } = useAuth();
+  const { login, errors: apiErrors } = useAuth();
   const [form, setForm] = useState({ email: "", password: "" });
+  const [localErrors, setLocalErrors] = useState([]);
 
-  // Si ya está logueado, no mostramos el form
-  if (user) return <p style={{ padding: 16 }}>Ya has iniciado sesión.</p>;
+  const onChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
-  const onChange = (e) => {
-    setError(null);
-    setForm({ ...form, [e.target.name]: e.target.value });
-  };
-
-  const onSubmit = async (e) => {
+  const onSubmit = (e) => {
     e.preventDefault();
-    const res = await login(form);
-    if (res.ok) navigate("/dashboard");
+    const errs = [];
+    if (!isEmail(form.email)) errs.push("Ingresa un correo electrónico válido.");
+    if ((form.password || "").length < 6)
+      errs.push("La contraseña debe tener al menos 6 caracteres.");
+    if (errs.length) {
+      setLocalErrors(errs);
+      return;
+    }
+    setLocalErrors([]);
+    login(form);
   };
+
+  // Combinar errores locales + de API (si hay)
+  const allErrors = useMemo(
+    () => [...(localErrors || []), ...((apiErrors && Array.isArray(apiErrors)) ? apiErrors : [])],
+    [localErrors, apiErrors]
+  );
 
   return (
-    <div style={{ padding: 16 }}>
+    <div style={{ maxWidth: 520, margin: "4rem auto" }}>
       <h1>Iniciar sesión</h1>
-      {error && <p style={{ color: "crimson" }}>{error}</p>}
-      <form onSubmit={onSubmit}>
+
+      {allErrors.length > 0 && (
+        <div style={{ color: "crimson", marginBottom: 12 }}>
+          {allErrors.map((err, i) => (
+            <div key={i}>{err}</div>
+          ))}
+        </div>
+      )}
+
+      <form onSubmit={onSubmit} noValidate>
         <input
+          type="email"
           name="email"
-          placeholder="Email"
+          placeholder="Correo electrónico"
           value={form.email}
           onChange={onChange}
-          type="email"
+          style={{ width: "100%", padding: 10, marginBottom: 10 }}
           required
-          style={{ display: "block", marginBottom: 8 }}
         />
         <input
+          type="password"
           name="password"
           placeholder="Contraseña"
           value={form.password}
           onChange={onChange}
-          type="password"
+          style={{ width: "100%", padding: 10, marginBottom: 10 }}
           required
-          style={{ display: "block", marginBottom: 8 }}
+          minLength={6}
         />
-        <button disabled={submitting} type="submit">
-          {submitting ? "Entrando..." : "Entrar"}
-        </button>
+        <button type="submit" style={{ padding: "8px 16px" }}>Entrar</button>
       </form>
-      <p style={{ marginTop: 12 }}>
+
+      <p style={{ marginTop: 16 }}>
         ¿No tienes cuenta? <Link to="/register">Regístrate</Link>
       </p>
     </div>

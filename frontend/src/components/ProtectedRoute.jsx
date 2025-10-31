@@ -1,12 +1,16 @@
-// src/components/ProtectedRoute.jsx
-import { Navigate } from "react-router-dom";
+import { Navigate, Outlet } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
-export default function ProtectedRoute({ children }) {
-  const { user, loading } = useAuth();
+export default function ProtectedRoute() {
+  const { isAuthenticated, loadingProfile } = useAuth();
 
-  if (loading) return <p style={{ padding: 16 }}>Cargando…</p>;
-  if (!user) return <Navigate to="/login" replace />;
+  if (loadingProfile) {
+    return (
+      <div style={{ padding: 24, fontFamily: "system-ui" }}>
+        Cargando…
+      </div>
+    );
+  }
 
-  return children;
+  return isAuthenticated ? <Outlet /> : <Navigate to="/login" replace />;
 }

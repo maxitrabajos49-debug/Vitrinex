@@ -1,3 +1,11 @@
-html, body, #root { height: 100%; }
-body { margin: 0; font-family: system-ui, Arial; color: #111; }
 * { box-sizing: border-box; }
+:root { color-scheme: light; }
+html, body, #root { height: 100%; }
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial;
+  background: #fafafa;
+  color: #111;
+}
+a { color: inherit; text-decoration: none; }
+button { cursor: pointer; }

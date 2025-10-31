@@ -1,16 +1,14 @@
-// src/middlewares/authRequired.js
-import jwt from "jsonwebtoken";
-import { JWT_SECRET } from "../config.js";
+import jwt from 'jsonwebtoken';
 
 export function authRequired(req, res, next) {
   const { token } = req.cookies || {};
-  if (!token) return res.status(401).json({ message: "No autorizado" });
+  if (!token) return res.status(401).json({ message: 'No token' });
 
   try {
-    const user = jwt.verify(token, JWT_SECRET);
-    req.user = user; // { id: '...' }
+    const user = jwt.verify(token, process.env.TOKEN_SECRET);
+    req.user = user;
     next();
-  } catch (err) {
-    return res.status(401).json({ message: "Token inválido" });
+  } catch (e) {
+    return res.status(401).json({ message: 'Invalid token' });
   }
 }

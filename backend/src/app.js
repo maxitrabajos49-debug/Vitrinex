@@ -1,24 +1,19 @@
 import express from "express";
 import morgan from "morgan";
-import cors from "cors";
 import cookieParser from "cookie-parser";
+import cors from "cors";
+import { FRONTEND_ORIGIN } from "./config.js";
 import authRoutes from "./routes/auth.routes.js";
-import { CLIENT_URL } from "./config.js";
+import tasksRoutes from "./routes/tasks.routes.js";
 
 const app = express();
 
-app.use(cors({
-  origin: CLIENT_URL,
-  credentials: true,
-}));
+app.use(cors({ origin: FRONTEND_ORIGIN, credentials: true }));
+app.use(cookieParser());
 app.use(morgan("dev"));
 app.use(express.json());
-app.use(cookieParser());
 
-// Rutas
 app.use("/api/auth", authRoutes);
-
-// Healthcheck
-app.get("/api/health", (_req, res) => res.json({ ok: true }));
+app.use("/api/tasks", tasksRoutes);
 
 export default app;

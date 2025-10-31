@@ -1,18 +1,15 @@
 import mongoose from "mongoose";
 
-const taskSchema = new mongoose.Schema(
+const TaskSchema = new mongoose.Schema(
   {
+    owner: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
     title: { type: String, required: true, trim: true },
-    description: { type: String, required: true, trim: true },
-    date: { type: Date, default: Date.now },   // 👈 Date con D mayúscula
-    done: { type: Boolean, default: false },
-    user: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true,                           // 👈 cada tarea pertenece a un usuario
-    },
+    description: { type: String, default: "" },
+    type: { type: String, enum: ["product", "service"], default: "product" },
+    price: { type: Number, min: 0 },            // solo aplica a product
+    imageUrl: { type: String },                 // /uploads/archivo.jpg
   },
   { timestamps: true }
 );
 
-export default mongoose.model("Task", taskSchema);
+export default mongoose.model("Task", TaskSchema);
