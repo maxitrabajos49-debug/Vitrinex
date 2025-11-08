@@ -1,5 +1,5 @@
 // frontend/src/App.jsx
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route } from "react-router-dom";
 
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
@@ -9,23 +9,19 @@ import TaskFormPage from "./pages/TaskFormPage";
 import OnboardingPage from "./pages/OnboardingPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Layout from "./components/Layout";
+import ExploreStoresPage from "./pages/ExploreStoresPage";
 
 export default function App() {
   return (
     <Routes>
-      {/* Redirección base */}
-      <Route path="/" element={<Navigate to="/login" replace />} />
+      {/* Home pública: mapa + filtros + lista de negocios */}
+      <Route path="/" element={<ExploreStoresPage />} />
 
-      {/* Públicas */}
+      {/* Auth pública */}
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
 
-      {/* Onboarding (protegida, pero sin layout principal si prefieres) */}
-      <Route element={<ProtectedRoute />}>
-        <Route path="/onboarding" element={<OnboardingPage />} />
-      </Route>
-
-      {/* Protegidas con Layout (navbar, etc.) */}
+      {/* Rutas protegidas con layout (panel interno) */}
       <Route element={<ProtectedRoute />}>
         <Route element={<Layout />}>
           <Route path="/dashboard" element={<DashboardPage />} />
@@ -33,6 +29,9 @@ export default function App() {
           <Route path="/tasks/new" element={<TaskFormPage />} />
           <Route path="/tasks/:id/edit" element={<TaskFormPage />} />
         </Route>
+
+        {/* Rutas protegidas SIN layout principal */}
+        <Route path="/onboarding" element={<OnboardingPage />} />
       </Route>
 
       {/* 404 */}

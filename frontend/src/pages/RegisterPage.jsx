@@ -1,90 +1,122 @@
-import { useState, useMemo } from "react";
-import { Link } from "react-router-dom";
+// src/pages/RegisterPage.jsx
+import { useEffect } from "react";
+import { useForm } from "react-hook-form";
 import { useAuth } from "../context/AuthContext";
-
-const isEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v || "");
+import { Link, useNavigate } from "react-router-dom";
 
 export default function RegisterPage() {
-  const { register, errors: apiErrors } = useAuth();
-  const [form, setForm] = useState({ username: "", email: "", password: "" });
-  const [localErrors, setLocalErrors] = useState([]);
+  const {
+    register: registerField,
+    handleSubmit,
+    formState: { errors },
+  } = useForm();
 
-  const onChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+  const { signup, isAuthenticated, authErrors } = useAuth();
+  const navigate = useNavigate();
 
-  const onSubmit = (e) => {
-    e.preventDefault();
-    const errs = [];
-
-    if (!form.username || form.username.trim().length < 2)
-      errs.push("Ingresa un nombre válido (mínimo 2 caracteres).");
-
-    if (!isEmail(form.email))
-      errs.push("Ingresa un correo electrónico válido.");
-
-    if ((form.password || "").length < 6)
-      errs.push("La contraseña debe tener al menos 6 caracteres.");
-
-    if (errs.length) {
-      setLocalErrors(errs);
-      return;
+  useEffect(() => {
+    if (isAuthenticated) {
+      // Después de registrarse, lo dejamos en el home viendo el mapa
+      navigate("/");
     }
-    setLocalErrors([]);
-    register(form);
-  };
+  }, [isAuthenticated, navigate]);
 
-  const allErrors = useMemo(
-    () => [...(localErrors || []), ...((apiErrors && Array.isArray(apiErrors)) ? apiErrors : [])],
-    [localErrors, apiErrors]
-  );
+  const onSubmit = handleSubmit(async (values) => {
+    await signup(values); // values: { username, email, password }
+  });
 
   return (
-    <div style={{ maxWidth: 520, margin: "4rem auto" }}>
-      <h1>Crear cuenta</h1>
+    <div className="min-h-screen flex items-center justify-center bg-slate-100 px-4">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-md p-6 space-y-4">
+        <h1 className="text-xl font-semibold text-slate-800">
+          Crear cuenta en Vitrinex
+        </h1>
+        <p className="text-sm text-slate-500">
+          Explora negocios en el mapa y, si quieres, registra tu propio negocio más adelante.
+        </p>
 
-      {allErrors.length > 0 && (
-        <div style={{ color: "crimson", marginBottom: 12 }}>
-          {allErrors.map((err, i) => (
-            <div key={i}>{err}</div>
+        {authErrors &&
+          authErrors.map((err, i) => (
+            <p
+              key={i}
+              className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2"
+            >
+              {err}
+            </p>
           ))}
-        </div>
-      )}
 
-      <form onSubmit={onSubmit} noValidate>
-        <input
-          type="text"
-          name="username"
-          placeholder="Nombre"
-          value={form.username}
-          onChange={onChange}
-          style={{ width: "100%", padding: 10, marginBottom: 10 }}
-          required
-          minLength={2}
-        />
-        <input
-          type="email"
-          name="email"
-          placeholder="Correo electrónico"
-          value={form.email}
-          onChange={onChange}
-          style={{ width: "100%", padding: 10, marginBottom: 10 }}
-          required
-        />
-        <input
-          type="password"
-          name="password"
-          placeholder="Contraseña"
-          value={form.password}
-          onChange={onChange}
-          style={{ width: "100%", padding: 10, marginBottom: 10 }}
-          required
-          minLength={6}
-        />
-        <button type="submit" style={{ padding: "8px 16px" }}>Registrarme</button>
-      </form>
+        <form onSubmit={onSubmit} className="space-y-4 text-sm">
+          <div>
+            <label className="block mb-1 text-slate-700">Nombre</label>
+            <input
+              type="text"
+              {...registerField("username", { required: "El nombre es obligatorio" })}
+              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="Tu nombre o nombre de usuario"
+            />
+            {errors.username && (
+              <p className="text-xs text-red-500 mt-1">
+                {errors.username.message}
+              </p>
+            )}
+          </div>
 
-      <p style={{ marginTop: 16 }}>
-        ¿Ya tienes cuenta? <Link to="/login">Inicia sesión</Link>
-      </p>
+          <div>
+            <label className="block mb-1 text-slate-700">Correo electrónico</label>
+            <input
+              type="email"
+              {...registerField("email", {
+                required: "El correo es obligatorio",
+              })}
+              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="ejemplo@correo.com"
+            />
+            {errors.email && (
+              <p className="text-xs text-red-500 mt-1">
+                {errors.email.message}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label className="block mb-1 text-slate-700">Contraseña</label>
+            <input
+              type="password"
+              {...registerField("password", {
+                required: "La contraseña es obligatoria",
+                minLength: {
+                  value: 6,
+                  message: "La contraseña debe tener al menos 6 caracteres",
+                },
+              })}
+              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="••••••••"
+            />
+            {errors.password && (
+              <p className="text-xs text-red-500 mt-1">
+                {errors.password.message}
+              </p>
+            )}
+          </div>
+
+          <button
+            type="submit"
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2 text-sm font-medium transition"
+          >
+            Crear cuenta
+          </button>
+        </form>
+
+        <p className="text-xs text-slate-500 text-center">
+          ¿Ya tienes cuenta?{" "}
+          <Link
+            to="/login"
+            className="text-blue-600 hover:text-blue-700 font-medium"
+          >
+            Inicia sesión
+          </Link>
+        </p>
+      </div>
     </div>
   );
 }

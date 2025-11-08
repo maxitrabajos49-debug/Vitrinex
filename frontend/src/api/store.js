@@ -1,16 +1,16 @@
 // src/api/store.js
 import api from "./axios";
 
-export const getMyStore = () => api.get("/stores/me");
+// 🔹 público: listado de negocios con filtros (para el mapa / home)
+export const listPublicStores = (params = {}) =>
+  api.get("/stores", { params });
 
-// Crea o actualiza la “tienda” del usuario autenticado (upsert en el backend)
-export const saveMyStore = (payload) => api.post("/stores", payload);
-/*
-payload esperado:
-{
-  name: "Mi tienda",
-  mode: "products" | "bookings",
-  description?: "…",
-  logoUrl?: "https://…"
-}
-*/
+// 🔹 privado: lista mis tiendas (vendedor)
+export const listMyStores = () => api.get("/stores/my");
+
+// 🔹 privado: crea una tienda nueva
+export const saveMyStore = (payload) => api.post("/stores/my", payload);
+
+// 🔹 privado: actualiza una tienda existente
+export const updateMyStore = (id, payload) =>
+  api.put(`/stores/my/${id}`, payload);
