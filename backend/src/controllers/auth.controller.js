@@ -1,48 +1,51 @@
 // src/controllers/auth.controller.js
-import User from "../models/user.model.js";
-import { createAccessToken } from "../libs/jwt.js";
+import User from '../models/user.model.js';
+import { createAccessToken } from '../libs/jwt.js';
 
 export const register = async (req, res) => {
   try {
-    const { email, username, password } = req.body;
+    const { username, email, password } = req.body;
 
-    if (!email || !username || !password) {
+    if (!username || !email || !password) {
       return res
         .status(400)
-        .json({ message: "Email, nombre de usuario y contraseña son obligatorios." });
+        .json({ message: 'Todos los campos son obligatorios' });
     }
 
-    const userFound = await User.findOne({ email });
-    if (userFound) {
-      return res.status(400).json({ message: "Este correo ya está registrado." });
+    const exists = await User.findOne({ email });
+    if (exists) {
+      return res
+        .status(409)
+        .json({ message: 'El correo ya está registrado' });
     }
 
-    const newUser = new User({
-      email,
-      username,
-      password,
-      role: "user", // ya no diferenciamos cliente/vendedor
-    });
+    const newUser = new User({ username, email, password });
+    await newUser.save();
 
-    const userSaved = await newUser.save();
-
-    const token = await createAccessToken({ id: userSaved._id });
-
-    res.cookie("token", token, {
+    const token = await createAccessToken({ id: newUser._id });
+    res.cookie('token', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      sameSite: 'lax',
+      secure: false,
+      path: '/',
     });
 
-    res.json({
-      id: userSaved._id,
-      username: userSaved.username,
-      email: userSaved.email,
-      role: userSaved.role,
+    return res.status(201).json({
+      id: newUser._id,
+      username: newUser.username,
+      email: newUser.email,
+      avatarUrl: newUser.avatarUrl || null,
+      bio: newUser.bio || '',
     });
-  } catch (error) {
-    console.error("Error en register:", error);
-    res.status(500).json({ message: "Error al registrar el usuario" });
+  } catch (err) {
+    if (err?.code === 11000) {
+      return res
+        .status(409)
+        .json({ message: 'El correo ya está registrado' });
+    }
+    return res
+      .status(500)
+      .json({ message: 'Error interno al registrar' });
   }
 };
 
@@ -52,59 +55,100 @@ export const login = async (req, res) => {
 
     const userFound = await User.findOne({ email });
     if (!userFound) {
-      return res.status(401).json({ message: "Credenciales inválidas" });
+      return res
+        .status(401)
+        .json({ message: 'Credenciales inválidas' });
     }
 
     const isMatch = await userFound.comparePassword(password);
     if (!isMatch) {
-      return res.status(401).json({ message: "Credenciales inválidas" });
+      return res
+        .status(401)
+        .json({ message: 'Credenciales inválidas' });
     }
 
     const token = await createAccessToken({ id: userFound._id });
-
-    res.cookie("token", token, {
+    res.cookie('token', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      sameSite: 'lax',
+      secure: false,
+      path: '/',
     });
 
-    res.json({
+    return res.json({
       id: userFound._id,
       username: userFound.username,
       email: userFound.email,
-      role: userFound.role,
+      avatarUrl: userFound.avatarUrl || null,
+      bio: userFound.bio || '',
     });
-  } catch (error) {
-    console.error("Error en login:", error);
-    res.status(500).json({ message: "Error al iniciar sesión" });
+  } catch (err) {
+    return res
+      .status(500)
+      .json({ message: 'Error interno al iniciar sesión' });
   }
 };
 
-export const logout = (req, res) => {
-  res.cookie("token", "", {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    expires: new Date(0),
-  });
-  return res.json({ message: "Sesión cerrada" });
+export const logout = (_req, res) => {
+  res.clearCookie('token', { path: '/' });
+  return res.json({ message: 'Sesión cerrada' });
 };
 
-// 👇 Esta función se llamará getProfile, como espera auth.routes.js
 export const getProfile = async (req, res) => {
-  try {
-    const userFound = await User.findById(req.user.id);
-    if (!userFound)
-      return res.status(404).json({ message: "Usuario no encontrado" });
+  const user = await User.findById(req.user.id).select('-password');
+  if (!user)
+    return res.status(404).json({ message: 'Usuario no encontrado' });
+  res.json(user);
+};
 
-    res.json({
-      id: userFound._id,
-      username: userFound.username,
-      email: userFound.email,
-      role: userFound.role,
+// 🔥 Actualizar perfil de usuario (incluye avatar y bio)
+export const updateProfile = async (req, res) => {
+  try {
+    const { username, email, password, avatarUrl, bio } = req.body;
+
+    const user = await User.findById(req.user.id);
+    if (!user)
+      return res.status(404).json({ message: 'Usuario no encontrado' });
+
+    if (username) {
+      user.username = username;
+    }
+
+    if (email && email !== user.email) {
+      const exists = await User.findOne({ email });
+      if (exists && exists._id.toString() !== user._id.toString()) {
+        return res
+          .status(409)
+          .json({ message: 'Ese correo ya está en uso' });
+      }
+      user.email = email;
+    }
+
+    // Cambiar contraseña (opcional)
+    if (password && password.length >= 6) {
+      user.password = password; // el pre('save') se encarga de hashearla
+    }
+
+    if (avatarUrl !== undefined) {
+      user.avatarUrl = avatarUrl;
+    }
+
+    if (bio !== undefined) {
+      user.bio = bio;
+    }
+
+    await user.save();
+
+    return res.json({
+      id: user._id,
+      username: user.username,
+      email: user.email,
+      avatarUrl: user.avatarUrl || null,
+      bio: user.bio || '',
     });
-  } catch (error) {
-    console.error("Error en getProfile:", error);
-    res.status(500).json({ message: "Error al obtener el perfil" });
+  } catch (err) {
+    return res
+      .status(500)
+      .json({ message: 'Error al actualizar el perfil' });
   }
 };

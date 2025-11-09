@@ -16,13 +16,13 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      // Después de iniciar sesión, lo dejamos en el mapa
+      // Después de iniciar sesión, lo dejamos en el mapa / home
       navigate("/");
     }
   }, [isAuthenticated, navigate]);
 
   const onSubmit = handleSubmit(async (values) => {
-    await signin(values); // 👈 usamos signin del AuthContext
+    await signin(values);
   });
 
   return (
@@ -32,7 +32,8 @@ export default function LoginPage() {
           Iniciar sesión
         </h1>
         <p className="text-sm text-slate-500">
-          Accede a tu cuenta para administrar tus negocios o crear nuevos en Vitrinex.
+          Accede a tu cuenta para administrar tus negocios o crear nuevos
+          en Vitrinex.
         </p>
 
         {authErrors &&
@@ -66,7 +67,9 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <label className="block mb-1 text-slate-700">Contraseña</label>
+            <label className="block mb-1 text-slate-700">
+              Contraseña
+            </label>
             <input
               type="password"
               {...register("password", {

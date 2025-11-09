@@ -1,23 +1,38 @@
-// src/components/MainHeader.jsx
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
 export default function MainHeader({ subtitle }) {
   const { isAuthenticated, user, logout } = useAuth();
   const [openMenu, setOpenMenu] = useState(false);
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      navigate("/login");
+    } finally {
+      setOpenMenu(false);
+    }
+  };
 
   return (
-    <header className="bg-white border-b shadow-sm">
+    <header className="bg-white border-b shadow-sm sticky top-0 z-50">
       <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-slate-800">Vitrinex</h1>
+        {/* LOGO → vuelve al inicio */}
+        <div
+          className="cursor-pointer select-none"
+          onClick={() => navigate("/")}
+        >
+          <h1 className="text-xl font-bold text-slate-800 hover:text-blue-600 transition">
+            Vitrinex
+          </h1>
           {subtitle && (
             <span className="text-sm text-slate-500">{subtitle}</span>
           )}
         </div>
 
-        {/* Zona derecha: login o ajustes */}
+        {/* DERECHA: sesión y menú */}
         <div className="flex items-center gap-3 relative">
           {!isAuthenticated && (
             <Link
@@ -30,14 +45,23 @@ export default function MainHeader({ subtitle }) {
 
           {isAuthenticated && (
             <>
-              {/* Indicador sesión iniciada */}
-              <button
-                type="button"
-                className="bg-green-50 text-green-700 border border-green-200 text-xs md:text-sm font-medium rounded-lg px-3 py-2 cursor-default flex items-center gap-2"
-              >
-                <span className="h-2 w-2 rounded-full bg-green-500" />
-                {user?.username || "Sesión iniciada"}
-              </button>
+              {/* Avatar + nombre */}
+              <div className="flex items-center gap-2">
+                {user?.avatarUrl ? (
+                  <img
+                    src={user.avatarUrl}
+                    alt="Avatar"
+                    className="h-8 w-8 rounded-full object-cover border"
+                  />
+                ) : (
+                  <div className="h-8 w-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-600 text-sm font-semibold">
+                    {user?.username?.[0]?.toUpperCase() || "U"}
+                  </div>
+                )}
+                <span className="text-sm font-medium text-slate-700">
+                  {user?.username}
+                </span>
+              </div>
 
               {/* Botón Ajustes + menú */}
               <div className="relative">
@@ -46,25 +70,29 @@ export default function MainHeader({ subtitle }) {
                   onClick={() => setOpenMenu((prev) => !prev)}
                   className="border border-slate-300 text-slate-700 text-xs md:text-sm rounded-lg px-3 py-2 hover:bg-slate-50 flex items-center gap-1"
                 >
-                  Ajustes
-                  <span className="text-[10px]">▼</span>
+                  <span>Ajustes</span>
+                  <span className="text-xs">▾</span>
                 </button>
 
                 {openMenu && (
-                  <div className="absolute right-0 mt-2 w-48 bg-white border rounded-lg shadow-lg text-sm z-20">
+                  <div className="absolute right-0 mt-2 w-44 bg-white border border-slate-200 rounded-lg shadow-lg text-sm z-20">
+                    <Link
+                      to="/perfil"
+                      onClick={() => setOpenMenu(false)}
+                      className="block px-4 py-2 hover:bg-slate-50 border-b"
+                    >
+                      Editar perfil
+                    </Link>
                     <Link
                       to="/onboarding"
                       onClick={() => setOpenMenu(false)}
-                      className="block w-full text-left px-3 py-2 hover:bg-slate-50"
+                      className="block px-4 py-2 hover:bg-slate-50 border-b"
                     >
                       Ver / editar mis tiendas
                     </Link>
                     <button
-                      onClick={() => {
-                        setOpenMenu(false);
-                        logout();
-                      }}
-                      className="w-full text-left px-3 py-2 hover:bg-red-50 text-red-600 border-t"
+                      onClick={handleLogout}
+                      className="w-full text-left px-4 py-2 hover:bg-slate-50 text-red-600"
                     >
                       Cerrar sesión
                     </button>

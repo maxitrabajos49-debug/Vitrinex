@@ -1,50 +1,35 @@
 // src/models/user.model.js
-import mongoose from "mongoose";
-import bcrypt from "bcryptjs";
+import mongoose from 'mongoose';
+import bcrypt from 'bcryptjs';
 
 const userSchema = new mongoose.Schema(
   {
-    username: {
-      type: String,
-      required: true,
-      trim: true,
-    },
+    username: { type: String, required: true, trim: true },
     email: {
       type: String,
       required: true,
       unique: true,
-      trim: true,
       lowercase: true,
+      trim: true,
     },
-    password: {
-      type: String,
-      required: true,
-    },
-    // Ya no dividimos en "cliente" / "vendedor"
-    // Lo dejamos como un rol genérico (por si el día de mañana quieres ampliarlo)
-    role: {
-      type: String,
-      default: "user",
-    },
+    password: { type: String, required: true, minlength: 6 },
+
+    // 👇 NUEVO: datos de perfil
+    avatarUrl: { type: String },
+    bio: { type: String, maxlength: 500 },
   },
-  {
-    timestamps: true,
-  }
+  { timestamps: true }
 );
 
-userSchema.pre("save", async function (next) {
-  if (!this.isModified("password")) return next();
-  try {
-    const salt = await bcrypt.genSalt(10);
-    this.password = await bcrypt.hash(this.password, salt);
-    next();
-  } catch (err) {
-    next(err);
-  }
+userSchema.pre('save', async function (next) {
+  if (!this.isModified('password')) return next();
+  const salt = await bcrypt.genSalt(10);
+  this.password = await bcrypt.hash(this.password, salt);
+  next();
 });
 
-userSchema.methods.comparePassword = async function (candidatePassword) {
-  return bcrypt.compare(candidatePassword, this.password);
+userSchema.methods.comparePassword = function (candidate) {
+  return bcrypt.compare(candidate, this.password);
 };
 
-export default mongoose.model("User", userSchema);
+export default mongoose.model('User', userSchema);

@@ -10,7 +10,7 @@ export function authRequired(req, res, next) {
   }
 
   try {
-    const user = jwt.verify(token, JWT_SECRET); // 👈 misma clave que para firmar
+    const user = jwt.verify(token, JWT_SECRET);
     req.user = user;
     next();
   } catch (e) {

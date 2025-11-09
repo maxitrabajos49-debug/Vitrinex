@@ -2,7 +2,8 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import axios from "axios";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000/api";
+const API_URL =
+  import.meta.env.VITE_API_URL || "http://localhost:3000/api";
 
 const client = axios.create({
   baseURL: API_URL,
@@ -75,7 +76,7 @@ export function AuthProvider({ children }) {
       const res = await client.get("/auth/profile");
       setUser(res.data);
       setIsAuthenticated(true);
-    } catch (error) {
+    } catch (_error) {
       // 401 / sin cookie → no autenticado, pero no es error grave
       setUser(null);
       setIsAuthenticated(false);
@@ -103,8 +104,8 @@ export function AuthProvider({ children }) {
         isAuthenticated,
         loading,
         authErrors,
-        signup,   // 👈 ahora existe
-        signin,   // login
+        signup, // registro
+        signin, // login
         logout,
       }}
     >

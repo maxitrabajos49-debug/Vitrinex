@@ -1,23 +1,20 @@
 // src/routes/store.routes.js
 import { Router } from "express";
-import { authRequired } from "../middlewares/authRequired.js";
 import {
   listPublicStores,
-  listMyStores,
-  createMyStore,
-  updateMyStore,
-  deleteMyStore,
+  getMyStore,
+  saveMyStore,
+  getStoreById,
 } from "../controllers/store.controller.js";
+import { authRequired } from "../middlewares/authRequired.js";
 
 const router = Router();
 
-// 🔹 Público: listado de negocios para el mapa
 router.get("/", listPublicStores);
+router.get("/my", authRequired, getMyStore);
+router.post("/my", authRequired, saveMyStore);
 
-// 🔹 Privado: rutas del vendedor (requieren estar logueado)
-router.get("/my", authRequired, listMyStores);
-router.post("/my", authRequired, createMyStore);
-router.put("/my/:id", authRequired, updateMyStore);
-router.delete("/my/:id", authRequired, deleteMyStore);
+// NUEVA RUTA PÚBLICA
+router.get("/:id", getStoreById);
 
 export default router;

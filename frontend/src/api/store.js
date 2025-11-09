@@ -1,16 +1,22 @@
 // src/api/store.js
-import api from "./axios";
+import axios from "axios";
 
-// 🔹 público: listado de negocios con filtros (para el mapa / home)
-export const listPublicStores = (params = {}) =>
-  api.get("/stores", { params });
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000/api";
 
-// 🔹 privado: lista mis tiendas (vendedor)
-export const listMyStores = () => api.get("/stores/my");
+const client = axios.create({
+  baseURL: API_URL,
+  withCredentials: true,
+});
 
-// 🔹 privado: crea una tienda nueva
-export const saveMyStore = (payload) => api.post("/stores/my", payload);
+export const listPublicStores = (filters = {}) =>
+  client.get("/stores", { params: filters });
 
-// 🔹 privado: actualiza una tienda existente
-export const updateMyStore = (id, payload) =>
-  api.put(`/stores/my/${id}`, payload);
+export const listMyStores = () => client.get("/stores/my");
+
+export const saveMyStore = (data) => client.post("/stores/my", data);
+
+export const updateMyStore = (id, data) =>
+  client.post("/stores/my", { ...data, _id: id });
+
+// NUEVO: obtener tienda por ID
+export const getStoreById = (id) => client.get(`/stores/${id}`);
