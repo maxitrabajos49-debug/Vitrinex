@@ -1,5 +1,84 @@
 // src/controllers/store.controller.js
 import Store from "../models/store.model.js";
+import Product from "../models/product.model.js";
+import Booking from "../models/booking.model.js";
+import Order from "../models/order.model.js";
+
+const DAY_ORDER = [
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+  "sunday",
+];
+
+const DAY_FROM_INDEX = {
+  0: "sunday",
+  1: "monday",
+  2: "tuesday",
+  3: "wednesday",
+  4: "thursday",
+  5: "friday",
+  6: "saturday",
+};
+
+const SLOT_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+const normalizeAvailability = (availability = []) => {
+  if (!Array.isArray(availability)) return [];
+
+  const map = new Map();
+
+  availability.forEach((entry) => {
+    const day = entry?.dayOfWeek;
+    const slots = Array.isArray(entry?.slots) ? entry.slots : [];
+    if (!DAY_ORDER.includes(day)) return;
+
+    const cleanSlots = Array.from(
+      new Set(
+        slots
+          .filter((slot) => typeof slot === "string" && SLOT_REGEX.test(slot.trim()))
+          .map((slot) => slot.trim())
+      )
+    ).sort();
+
+    map.set(day, cleanSlots);
+  });
+
+  return DAY_ORDER.filter((day) => map.has(day)).map((day) => ({
+    dayOfWeek: day,
+    slots: map.get(day),
+  }));
+};
+
+const normalizeDateOnly = (dateString) => {
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+  date.setUTCHours(0, 0, 0, 0);
+  return date;
+};
+
+const findStoreForOwner = async (storeId, userId) => {
+  const store = await Store.findById(storeId);
+  if (!store) {
+    return { error: { status: 404, message: "Tienda no encontrada" } };
+  }
+
+  if (userId) {
+    const ownerId = store.owner?.toString();
+    const legacyOwnerId = store.user?.toString();
+
+    if (ownerId !== userId && legacyOwnerId !== userId) {
+      return { error: { status: 403, message: "No tienes permisos sobre esta tienda" } };
+    }
+  }
+
+  return { store };
+};
 
 // 🔹 Listar tiendas públicas (home / mapa)
 export const listPublicStores = async (req, res) => {
@@ -154,6 +233,7 @@ export const getStoreById = async (req, res) => {
       comuna: store.comuna,
       tipoNegocio: store.tipoNegocio,
       mode: store.mode,
+      bookingAvailability: store.bookingAvailability || [],
       direccion: store.direccion,
       lat: store.lat,
       lng: store.lng,
@@ -166,5 +246,543 @@ export const getStoreById = async (req, res) => {
   } catch (err) {
     console.error("Error al obtener tienda:", err);
     res.status(500).json({ message: "Error al obtener la tienda" });
+  }
+};
+
+// 🔹 Disponibilidad para tiendas de agendamiento
+export const getStoreAvailability = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const store = await Store.findById(id).lean();
+
+    if (!store) {
+      return res.status(404).json({ message: "Tienda no encontrada" });
+    }
+
+    if (store.mode !== "bookings") {
+      return res
+        .status(400)
+        .json({ message: "Esta tienda no permite agendar citas" });
+    }
+
+    res.json({ availability: store.bookingAvailability || [] });
+  } catch (err) {
+    console.error("Error obteniendo disponibilidad:", err);
+    res.status(500).json({ message: "Error al obtener la disponibilidad" });
+  }
+};
+
+export const updateStoreAvailability = async (req, res) => {
+  const { id } = req.params;
+  const userId = req.user.id;
+
+  try {
+    const { store, error } = await findStoreForOwner(id, userId);
+
+    if (error) {
+      return res.status(error.status).json({ message: error.message });
+    }
+
+    if (store.mode !== "bookings") {
+      return res
+        .status(400)
+        .json({ message: "Esta tienda no es de agendamiento" });
+    }
+
+    const normalized = normalizeAvailability(req.body?.availability);
+    store.bookingAvailability = normalized;
+    await store.save();
+
+    res.json({ availability: store.bookingAvailability });
+  } catch (err) {
+    console.error("Error al actualizar disponibilidad:", err);
+    res.status(500).json({ message: "Error al actualizar la disponibilidad" });
+  }
+};
+
+export const listStoreAppointments = async (req, res) => {
+  const { id } = req.params;
+  const userId = req.user.id;
+
+  try {
+    const { store, error } = await findStoreForOwner(id, userId);
+
+    if (error) {
+      return res.status(error.status).json({ message: error.message });
+    }
+
+    if (store.mode !== "bookings") {
+      return res
+        .status(400)
+        .json({ message: "Esta tienda no es de agendamiento" });
+    }
+
+    const bookings = await Booking.find({ store: store._id })
+      .sort({ date: 1, slot: 1 })
+      .lean();
+
+    res.json(
+      bookings.map((booking) => ({
+        _id: booking._id,
+        customerName: booking.customerName,
+        customerEmail: booking.customerEmail,
+        customerPhone: booking.customerPhone,
+        date: booking.date,
+        slot: booking.slot,
+        status: booking.status,
+        notes: booking.notes,
+        createdAt: booking.createdAt,
+      }))
+    );
+  } catch (err) {
+    console.error("Error al listar reservas:", err);
+    res.status(500).json({ message: "Error al obtener las reservas" });
+  }
+};
+
+export const createAppointment = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const store = await Store.findById(id).lean();
+
+    if (!store) {
+      return res.status(404).json({ message: "Tienda no encontrada" });
+    }
+
+    if (store.mode !== "bookings") {
+      return res
+        .status(400)
+        .json({ message: "Esta tienda no permite agendar citas" });
+    }
+
+    const { customerName, customerEmail, customerPhone, date, slot, notes } =
+      req.body || {};
+
+    if (!customerName || !date || !slot) {
+      return res
+        .status(400)
+        .json({ message: "Nombre del cliente, fecha y horario son obligatorios" });
+    }
+
+    const normalizedDate = normalizeDateOnly(date);
+
+    if (!normalizedDate) {
+      return res.status(400).json({ message: "La fecha proporcionada no es válida" });
+    }
+
+    if (!SLOT_REGEX.test(slot)) {
+      return res.status(400).json({ message: "El horario no es válido" });
+    }
+
+    const dayKey = DAY_FROM_INDEX[normalizedDate.getUTCDay()];
+
+    const dayAvailability = (store.bookingAvailability || []).find(
+      (entry) => entry.dayOfWeek === dayKey
+    );
+
+    if (!dayAvailability || !dayAvailability.slots.includes(slot)) {
+      return res
+        .status(400)
+        .json({ message: "El horario seleccionado no está disponible" });
+    }
+
+    try {
+      const booking = await Booking.create({
+        store: store._id,
+        customerName,
+        customerEmail,
+        customerPhone,
+        date: normalizedDate,
+        slot,
+        notes: notes || "",
+      });
+
+      res.status(201).json({
+        _id: booking._id,
+        customerName: booking.customerName,
+        customerEmail: booking.customerEmail,
+        customerPhone: booking.customerPhone,
+        date: booking.date,
+        slot: booking.slot,
+        status: booking.status,
+        notes: booking.notes,
+      });
+    } catch (err) {
+      if (err?.code === 11000) {
+        return res
+          .status(409)
+          .json({ message: "Ese horario ya fue reservado. Elige otro." });
+      }
+      throw err;
+    }
+  } catch (err) {
+    console.error("Error al crear reserva:", err);
+    res.status(500).json({ message: "Error al reservar la cita" });
+  }
+};
+
+// 🔹 Productos para tiendas de ventas
+const mapProductResponse = (product) => ({
+  _id: product._id,
+  name: product.name,
+  description: product.description,
+  price: product.price,
+  images: product.images || [],
+  isActive: product.isActive,
+  createdAt: product.createdAt,
+  updatedAt: product.updatedAt,
+});
+
+export const listStoreProducts = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const store = await Store.findById(id).lean();
+
+    if (!store) {
+      return res.status(404).json({ message: "Tienda no encontrada" });
+    }
+
+    if (store.mode !== "products") {
+      return res
+        .status(400)
+        .json({ message: "Esta tienda no vende productos" });
+    }
+
+    const products = await Product.find({ store: store._id, isActive: true })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    res.json(products.map(mapProductResponse));
+  } catch (err) {
+    console.error("Error al listar productos:", err);
+    res.status(500).json({ message: "Error al obtener los productos" });
+  }
+};
+
+export const listStoreProductsForOwner = async (req, res) => {
+  const { id } = req.params;
+  const userId = req.user.id;
+
+  try {
+    const { store, error } = await findStoreForOwner(id, userId);
+
+    if (error) {
+      return res.status(error.status).json({ message: error.message });
+    }
+
+    if (store.mode !== "products") {
+      return res
+        .status(400)
+        .json({ message: "Esta tienda no vende productos" });
+    }
+
+    const products = await Product.find({ store: store._id })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    res.json(products.map(mapProductResponse));
+  } catch (err) {
+    console.error("Error al listar productos (dueño):", err);
+    res.status(500).json({ message: "Error al obtener los productos" });
+  }
+};
+
+const parseImages = (images) => {
+  if (!images) return [];
+  if (Array.isArray(images)) {
+    return images
+      .filter((img) => typeof img === "string" && img.trim().length > 0)
+      .map((img) => img.trim());
+  }
+  if (typeof images === "string" && images.trim()) {
+    return images
+      .split(/[\n,]+/)
+      .map((img) => img.trim())
+      .filter((img) => img.length > 0);
+  }
+  return [];
+};
+
+export const createStoreProduct = async (req, res) => {
+  const { id } = req.params;
+  const userId = req.user.id;
+
+  try {
+    const { store, error } = await findStoreForOwner(id, userId);
+
+    if (error) {
+      return res.status(error.status).json({ message: error.message });
+    }
+
+    if (store.mode !== "products") {
+      return res
+        .status(400)
+        .json({ message: "Esta tienda no vende productos" });
+    }
+
+    const { name, description, price, images, isActive } = req.body || {};
+
+    if (!name || typeof price === "undefined") {
+      return res
+        .status(400)
+        .json({ message: "Nombre y precio del producto son obligatorios" });
+    }
+
+    const numericPrice = Number(price);
+    if (Number.isNaN(numericPrice) || numericPrice < 0) {
+      return res.status(400).json({ message: "El precio debe ser un número válido" });
+    }
+
+    const product = await Product.create({
+      store: store._id,
+      name,
+      description: description || "",
+      price: numericPrice,
+      images: parseImages(images),
+      isActive: typeof isActive === "boolean" ? isActive : true,
+    });
+
+    res.status(201).json(mapProductResponse(product));
+  } catch (err) {
+    console.error("Error al crear producto:", err);
+    res.status(500).json({ message: "Error al crear el producto" });
+  }
+};
+
+export const updateStoreProduct = async (req, res) => {
+  const { id, productId } = req.params;
+  const userId = req.user.id;
+
+  try {
+    const { store, error } = await findStoreForOwner(id, userId);
+
+    if (error) {
+      return res.status(error.status).json({ message: error.message });
+    }
+
+    if (store.mode !== "products") {
+      return res
+        .status(400)
+        .json({ message: "Esta tienda no vende productos" });
+    }
+
+    const { name, description, price, images, isActive } = req.body || {};
+
+    const update = {};
+    if (typeof name !== "undefined") update.name = name;
+    if (typeof description !== "undefined") update.description = description;
+    if (typeof price !== "undefined") {
+      const numericPrice = Number(price);
+      if (Number.isNaN(numericPrice) || numericPrice < 0) {
+        return res
+          .status(400)
+          .json({ message: "El precio debe ser un número válido" });
+      }
+      update.price = numericPrice;
+    }
+    if (typeof images !== "undefined") {
+      update.images = parseImages(images);
+    }
+    if (typeof isActive !== "undefined") {
+      update.isActive = Boolean(isActive);
+    }
+
+    const product = await Product.findOneAndUpdate(
+      { _id: productId, store: store._id },
+      update,
+      { new: true }
+    ).lean();
+
+    if (!product) {
+      return res.status(404).json({ message: "Producto no encontrado" });
+    }
+
+    res.json(mapProductResponse(product));
+  } catch (err) {
+    console.error("Error al actualizar producto:", err);
+    res.status(500).json({ message: "Error al actualizar el producto" });
+  }
+};
+
+export const deleteStoreProduct = async (req, res) => {
+  const { id, productId } = req.params;
+  const userId = req.user.id;
+
+  try {
+    const { store, error } = await findStoreForOwner(id, userId);
+
+    if (error) {
+      return res.status(error.status).json({ message: error.message });
+    }
+
+    if (store.mode !== "products") {
+      return res
+        .status(400)
+        .json({ message: "Esta tienda no vende productos" });
+    }
+
+    const deleted = await Product.findOneAndDelete({
+      _id: productId,
+      store: store._id,
+    });
+
+    if (!deleted) {
+      return res.status(404).json({ message: "Producto no encontrado" });
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Error al eliminar producto:", err);
+    res.status(500).json({ message: "Error al eliminar el producto" });
+  }
+};
+
+// 🔹 Pedidos
+export const listStoreOrders = async (req, res) => {
+  const { id } = req.params;
+  const userId = req.user.id;
+
+  try {
+    const { store, error } = await findStoreForOwner(id, userId);
+
+    if (error) {
+      return res.status(error.status).json({ message: error.message });
+    }
+
+    if (store.mode !== "products") {
+      return res
+        .status(400)
+        .json({ message: "Esta tienda no vende productos" });
+    }
+
+    const orders = await Order.find({ store: store._id })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    res.json(
+      orders.map((order) => ({
+        _id: order._id,
+        items: order.items,
+        total: order.total,
+        status: order.status,
+        customerName: order.customerName,
+        customerEmail: order.customerEmail,
+        customerPhone: order.customerPhone,
+        customerAddress: order.customerAddress,
+        notes: order.notes,
+        createdAt: order.createdAt,
+      }))
+    );
+  } catch (err) {
+    console.error("Error al obtener pedidos:", err);
+    res.status(500).json({ message: "Error al obtener los pedidos" });
+  }
+};
+
+export const createStoreOrder = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const store = await Store.findById(id).lean();
+
+    if (!store) {
+      return res.status(404).json({ message: "Tienda no encontrada" });
+    }
+
+    if (store.mode !== "products") {
+      return res
+        .status(400)
+        .json({ message: "Esta tienda no vende productos" });
+    }
+
+    const {
+      items,
+      customerName,
+      customerEmail,
+      customerPhone,
+      customerAddress,
+      notes,
+    } = req.body || {};
+
+    if (!customerName) {
+      return res
+        .status(400)
+        .json({ message: "El nombre del cliente es obligatorio" });
+    }
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return res
+        .status(400)
+        .json({ message: "Debes seleccionar al menos un producto" });
+    }
+
+    const cleanedItems = items
+      .map((item) => ({
+        productId: item?.productId || item?.product,
+        quantity: Math.max(1, Math.floor(Number(item?.quantity) || 0)),
+      }))
+      .filter((item) => item.productId && item.quantity > 0);
+
+    if (cleanedItems.length === 0) {
+      return res
+        .status(400)
+        .json({ message: "Los productos seleccionados no son válidos" });
+    }
+
+    const productIds = cleanedItems.map((item) => item.productId);
+    const products = await Product.find({
+      _id: { $in: productIds },
+      store: store._id,
+      isActive: true,
+    }).lean();
+
+    if (products.length !== cleanedItems.length) {
+      return res
+        .status(400)
+        .json({ message: "Uno o más productos ya no están disponibles" });
+    }
+
+    const orderItems = cleanedItems.map((item) => {
+      const product = products.find(
+        (p) => p._id.toString() === item.productId.toString()
+      );
+
+      const quantity = item.quantity;
+      const unitPrice = product.price;
+      const subtotal = Math.round(unitPrice * quantity * 100) / 100;
+
+      return {
+        product: product._id,
+        productName: product.name,
+        unitPrice,
+        quantity,
+        subtotal,
+      };
+    });
+
+    const total = orderItems.reduce((sum, item) => sum + item.subtotal, 0);
+
+    const order = await Order.create({
+      store: store._id,
+      items: orderItems,
+      total,
+      customerName,
+      customerEmail: customerEmail || "",
+      customerPhone: customerPhone || "",
+      customerAddress: customerAddress || "",
+      notes: notes || "",
+    });
+
+    res.status(201).json({
+      _id: order._id,
+      items: order.items,
+      total: order.total,
+      status: order.status,
+      customerName: order.customerName,
+    });
+  } catch (err) {
+    console.error("Error al crear pedido:", err);
+    res.status(500).json({ message: "Error al crear el pedido" });
   }
 };

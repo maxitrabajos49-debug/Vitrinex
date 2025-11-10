@@ -66,6 +66,31 @@ const storeSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+
+    bookingAvailability: {
+      type: [
+        {
+          dayOfWeek: {
+            type: String,
+            enum: [
+              "monday",
+              "tuesday",
+              "wednesday",
+              "thursday",
+              "friday",
+              "saturday",
+              "sunday",
+            ],
+            required: true,
+          },
+          slots: {
+            type: [String],
+            default: [],
+          },
+        },
+      ],
+      default: [],
+    },
   },
   {
     timestamps: true,

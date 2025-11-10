@@ -20,3 +20,35 @@ export const updateMyStore = (id, data) =>
 
 // NUEVO: obtener tienda por ID
 export const getStoreById = (id) => client.get(`/stores/${id}`);
+
+export const getStoreAvailability = (id) =>
+  client.get(`/stores/${id}/availability`);
+
+export const updateStoreAvailability = (id, availability) =>
+  client.put(`/stores/${id}/availability`, { availability });
+
+export const listStoreAppointments = (id) =>
+  client.get(`/stores/${id}/appointments`);
+
+export const createAppointment = (id, data) =>
+  client.post(`/stores/${id}/appointments`, data);
+
+export const listStoreProducts = (id) => client.get(`/stores/${id}/products`);
+
+export const listStoreProductsForOwner = (id) =>
+  client.get(`/stores/${id}/products/manage`);
+
+export const createStoreProduct = (id, data) =>
+  client.post(`/stores/${id}/products`, data);
+
+export const updateStoreProduct = (id, productId, data) =>
+  client.put(`/stores/${id}/products/${productId}`, data);
+
+export const deleteStoreProduct = (id, productId) =>
+  client.delete(`/stores/${id}/products/${productId}`);
+
+export const createStoreOrder = (id, data) =>
+  client.post(`/stores/${id}/orders`, data);
+
+export const listStoreOrders = (id) =>
+  client.get(`/stores/${id}/orders/manage`);
