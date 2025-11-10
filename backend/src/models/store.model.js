@@ -66,10 +66,60 @@ const storeSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+
+    bookingAvailability: {
+      type: [
+        {
+          dayOfWeek: {
+            type: String,
+            enum: [
+              "monday",
+              "tuesday",
+              "wednesday",
+              "thursday",
+              "friday",
+              "saturday",
+              "sunday",
+            ],
+            required: true,
+          },
+          slots: {
+            type: [String],
+            default: [],
+          },
+        },
+      ],
+      default: [],
+    },
   },
   {
     timestamps: true,
   }
 );
 
-export default mongoose.model("Store", storeSchema);
+// Indexes to speed up owner-based lookups without enforcing uniqueness
+storeSchema.index({ owner: 1 });
+storeSchema.index({ user: 1 });
+
+const Store = mongoose.model("Store", storeSchema);
+
+export async function ensureStoreIndexes() {
+  try {
+    const indexes = await Store.collection.indexes();
+    const legacyUniqueOwner = indexes.find(
+      (idx) => idx.name === "owner_1" && idx.unique
+    );
+
+    if (legacyUniqueOwner) {
+      await Store.collection.dropIndex("owner_1");
+      console.log("🛠️ Índice único legacy owner_1 eliminado de stores");
+    }
+  } catch (error) {
+    // Si la colección aún no existe o no podemos obtener los índices, ignoramos el error
+    if (error?.codeName !== "NamespaceNotFound") {
+      console.error("Error asegurando índices de Store:", error);
+    }
+  }
+}
+
+export default Store;

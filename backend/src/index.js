@@ -8,6 +8,7 @@ import mongoose from "mongoose";
 import authRoutes from "./routes/auth.routes.js";
 import taskRoutes from "./routes/tasks.routes.js";
 import storeRoutes from "./routes/store.routes.js";
+import { ensureStoreIndexes } from "./models/store.model.js";
 
 const app = express();
 
@@ -36,6 +37,8 @@ app.use("/api/stores", storeRoutes);
 
     await mongoose.connect(MONGODB_URI);
     console.log("✅ MongoDB conectado a Atlas");
+
+    await ensureStoreIndexes();
 
     app.listen(PORT, () => {
       console.log(`✅ API escuchando en http://localhost:${PORT}`);

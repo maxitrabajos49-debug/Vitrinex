@@ -2,7 +2,14 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import MainHeader from "../components/MainHeader";
-import { getStoreById, updateMyStore } from "../api/store";
+import {
+  getStoreById,
+  updateMyStore,
+} from "../api/store";
+import BookingAvailabilityManager from "../components/BookingAvailabilityManager";
+import AppointmentsList from "../components/AppointmentsList";
+import ProductManager from "../components/ProductManager";
+import OrdersList from "../components/OrdersList";
 
 export default function StoreProfilePage() {
   const { id } = useParams();
@@ -17,6 +24,7 @@ export default function StoreProfilePage() {
     tipoNegocio: "",
     direccion: "",
   });
+  const [storeData, setStoreData] = useState(null);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -28,20 +36,23 @@ export default function StoreProfilePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  const mapStoreToForm = (store) => ({
+    name: store?.name || "",
+    mode: store?.mode || "products",
+    description: store?.description || "",
+    logoUrl: store?.logoUrl || "",
+    comuna: store?.comuna || "",
+    tipoNegocio: store?.tipoNegocio || "",
+    direccion: store?.direccion || "",
+  });
+
   const loadStore = async () => {
     try {
       setLoading(true);
       setError("");
       const { data } = await getStoreById(id);
-      setForm({
-        name: data.name || "",
-        mode: data.mode || "products",
-        description: data.description || "",
-        logoUrl: data.logoUrl || "",
-        comuna: data.comuna || "",
-        tipoNegocio: data.tipoNegocio || "",
-        direccion: data.direccion || "",
-      });
+      setStoreData(data);
+      setForm(mapStoreToForm(data));
     } catch (err) {
       console.error(err);
       setError("No se pudo cargar la información de la tienda.");
@@ -107,7 +118,10 @@ export default function StoreProfilePage() {
         lng: coords.lng,
       };
 
-      await updateMyStore(id, payload);
+      const { data: updatedStore } = await updateMyStore(id, payload);
+
+      setStoreData(updatedStore);
+      setForm(mapStoreToForm(updatedStore));
 
       setMsg("Tienda actualizada correctamente.");
     } catch (err) {
@@ -117,6 +131,9 @@ export default function StoreProfilePage() {
       setSaving(false);
     }
   };
+
+  const modePendingChange =
+    storeData && form?.mode && storeData.mode !== form.mode;
 
   if (loading) {
     return (
@@ -284,6 +301,27 @@ export default function StoreProfilePage() {
             </div>
           </form>
         </section>
+
+        {modePendingChange && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-700">
+            Guarda los cambios para activar las herramientas de "
+            {form.mode === "bookings" ? "agendamiento" : "venta de productos"}".
+          </div>
+        )}
+
+        {!modePendingChange && storeData?.mode === "bookings" && (
+          <>
+            <BookingAvailabilityManager storeId={id} />
+            <AppointmentsList storeId={id} />
+          </>
+        )}
+
+        {!modePendingChange && storeData?.mode === "products" && (
+          <>
+            <ProductManager storeId={id} />
+            <OrdersList storeId={id} />
+          </>
+        )}
       </main>
     </div>
   );
