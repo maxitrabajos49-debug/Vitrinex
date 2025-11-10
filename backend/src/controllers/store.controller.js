@@ -65,15 +65,6 @@ const normalizeDateOnly = (dateString) => {
 const normalizeStoreMode = (store) =>
   store?.mode === "bookings" ? "bookings" : "products";
 
-const activeProductFilter = {
-  $or: [{ isActive: true }, { isActive: { $exists: false } }, { isActive: null }],
-};
-
-const withActiveProducts = (criteria = {}) => ({
-  ...criteria,
-  ...activeProductFilter,
-});
-
 const findStoreForOwner = async (storeId, userId) => {
   const store = await Store.findById(storeId);
   if (!store) {
