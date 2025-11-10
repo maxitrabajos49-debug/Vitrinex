@@ -62,6 +62,9 @@ const normalizeDateOnly = (dateString) => {
   return date;
 };
 
+const normalizeStoreMode = (store) =>
+  store?.mode === "bookings" ? "bookings" : "products";
+
 const findStoreForOwner = async (storeId, userId) => {
   const store = await Store.findById(storeId);
   if (!store) {
@@ -88,7 +91,15 @@ export const listPublicStores = async (req, res) => {
     const query = { isActive: true };
     if (comuna) query.comuna = comuna;
     if (tipoNegocio) query.tipoNegocio = tipoNegocio;
-    if (mode) query.mode = mode;
+    if (mode === "bookings") {
+      query.mode = "bookings";
+    } else if (mode === "products") {
+      query.$or = [
+        { mode: "products" },
+        { mode: { $exists: false } },
+        { mode: null },
+      ];
+    }
 
     const stores = await Store.find(query)
       .populate("owner", "username avatarUrl")
@@ -102,7 +113,7 @@ export const listPublicStores = async (req, res) => {
         logoUrl: s.logoUrl,
         comuna: s.comuna,
         tipoNegocio: s.tipoNegocio,
-        mode: s.mode,
+        mode: normalizeStoreMode(s),
         lat: s.lat,
         lng: s.lng,
         direccion: s.direccion,
@@ -232,7 +243,7 @@ export const getStoreById = async (req, res) => {
       logoUrl: store.logoUrl,
       comuna: store.comuna,
       tipoNegocio: store.tipoNegocio,
-      mode: store.mode,
+      mode: normalizeStoreMode(store),
       bookingAvailability: store.bookingAvailability || [],
       direccion: store.direccion,
       lat: store.lat,
@@ -259,7 +270,9 @@ export const getStoreAvailability = async (req, res) => {
       return res.status(404).json({ message: "Tienda no encontrada" });
     }
 
-    if (store.mode !== "bookings") {
+    const storeMode = normalizeStoreMode(store);
+
+    if (storeMode !== "bookings") {
       return res
         .status(400)
         .json({ message: "Esta tienda no permite agendar citas" });
@@ -283,7 +296,9 @@ export const updateStoreAvailability = async (req, res) => {
       return res.status(error.status).json({ message: error.message });
     }
 
-    if (store.mode !== "bookings") {
+    const storeMode = normalizeStoreMode(store);
+
+    if (storeMode !== "bookings") {
       return res
         .status(400)
         .json({ message: "Esta tienda no es de agendamiento" });
@@ -311,7 +326,9 @@ export const listStoreAppointments = async (req, res) => {
       return res.status(error.status).json({ message: error.message });
     }
 
-    if (store.mode !== "bookings") {
+    const storeMode = normalizeStoreMode(store);
+
+    if (storeMode !== "bookings") {
       return res
         .status(400)
         .json({ message: "Esta tienda no es de agendamiento" });
@@ -350,7 +367,9 @@ export const createAppointment = async (req, res) => {
       return res.status(404).json({ message: "Tienda no encontrada" });
     }
 
-    if (store.mode !== "bookings") {
+    const storeMode = normalizeStoreMode(store);
+
+    if (storeMode !== "bookings") {
       return res
         .status(400)
         .json({ message: "Esta tienda no permite agendar citas" });
@@ -443,7 +462,9 @@ export const listStoreProducts = async (req, res) => {
       return res.status(404).json({ message: "Tienda no encontrada" });
     }
 
-    if (store.mode !== "products") {
+    const storeMode = normalizeStoreMode(store);
+
+    if (storeMode !== "products") {
       return res
         .status(400)
         .json({ message: "Esta tienda no vende productos" });
@@ -471,7 +492,9 @@ export const listStoreProductsForOwner = async (req, res) => {
       return res.status(error.status).json({ message: error.message });
     }
 
-    if (store.mode !== "products") {
+    const storeMode = normalizeStoreMode(store);
+
+    if (storeMode !== "products") {
       return res
         .status(400)
         .json({ message: "Esta tienda no vende productos" });
@@ -515,7 +538,9 @@ export const createStoreProduct = async (req, res) => {
       return res.status(error.status).json({ message: error.message });
     }
 
-    if (store.mode !== "products") {
+    const storeMode = normalizeStoreMode(store);
+
+    if (storeMode !== "products") {
       return res
         .status(400)
         .json({ message: "Esta tienda no vende productos" });
@@ -561,7 +586,9 @@ export const updateStoreProduct = async (req, res) => {
       return res.status(error.status).json({ message: error.message });
     }
 
-    if (store.mode !== "products") {
+    const storeMode = normalizeStoreMode(store);
+
+    if (storeMode !== "products") {
       return res
         .status(400)
         .json({ message: "Esta tienda no vende productos" });
@@ -616,7 +643,9 @@ export const deleteStoreProduct = async (req, res) => {
       return res.status(error.status).json({ message: error.message });
     }
 
-    if (store.mode !== "products") {
+    const storeMode = normalizeStoreMode(store);
+
+    if (storeMode !== "products") {
       return res
         .status(400)
         .json({ message: "Esta tienda no vende productos" });
@@ -650,7 +679,9 @@ export const listStoreOrders = async (req, res) => {
       return res.status(error.status).json({ message: error.message });
     }
 
-    if (store.mode !== "products") {
+    const storeMode = normalizeStoreMode(store);
+
+    if (storeMode !== "products") {
       return res
         .status(400)
         .json({ message: "Esta tienda no vende productos" });
@@ -690,7 +721,9 @@ export const createStoreOrder = async (req, res) => {
       return res.status(404).json({ message: "Tienda no encontrada" });
     }
 
-    if (store.mode !== "products") {
+    const storeMode = normalizeStoreMode(store);
+
+    if (storeMode !== "products") {
       return res
         .status(400)
         .json({ message: "Esta tienda no vende productos" });
