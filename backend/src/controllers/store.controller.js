@@ -470,7 +470,9 @@ export const listStoreProducts = async (req, res) => {
         .json({ message: "Esta tienda no vende productos" });
     }
 
-    const products = await Product.find({ store: store._id, isActive: true })
+    const products = await Product.find(
+      withActiveProducts({ store: store._id })
+    )
       .sort({ createdAt: -1 })
       .lean();
 
@@ -764,11 +766,9 @@ export const createStoreOrder = async (req, res) => {
     }
 
     const productIds = cleanedItems.map((item) => item.productId);
-    const products = await Product.find({
-      _id: { $in: productIds },
-      store: store._id,
-      isActive: true,
-    }).lean();
+    const products = await Product.find(
+      withActiveProducts({ _id: { $in: productIds }, store: store._id })
+    ).lean();
 
     if (products.length !== cleanedItems.length) {
       return res
