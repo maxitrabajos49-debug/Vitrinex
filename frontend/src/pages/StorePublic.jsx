@@ -10,61 +10,41 @@ import {
 } from "../api/store";
 import MainHeader from "../components/MainHeader";
 
-const WEEKDAY_LABELS = ["Lu", "Ma", "Mi", "Ju", "Vi", "Sa", "Do"];
+const DAY_LABELS = {
+  monday: "Lunes",
+  tuesday: "Martes",
+  wednesday: "Miércoles",
+  thursday: "Jueves",
+  friday: "Viernes",
+  saturday: "Sábado",
+  sunday: "Domingo",
+};
 
-const calendarMonthFormatter = new Intl.DateTimeFormat("es-CL", {
-  month: "long",
-  year: "numeric",
-});
+const DAY_FROM_INDEX = {
+  0: "sunday",
+  1: "monday",
+  2: "tuesday",
+  3: "wednesday",
+  4: "thursday",
+  5: "friday",
+  6: "saturday",
+};
 
-const calendarDateFormatter = new Intl.DateTimeFormat("es-CL", {
-  weekday: "long",
-  year: "numeric",
-  month: "long",
-  day: "numeric",
-});
+const DAY_ORDER = [
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+  "sunday",
+];
 
 const currencyFormatter = new Intl.NumberFormat("es-CL", {
   style: "currency",
   currency: "CLP",
   minimumFractionDigits: 0,
 });
-
-const parseIsoDate = (value) => {
-  if (!value || typeof value !== "string") return null;
-  const [year, month, day] = value.split("-").map(Number);
-  if (
-    !Number.isInteger(year) ||
-    !Number.isInteger(month) ||
-    !Number.isInteger(day)
-  ) {
-    return null;
-  }
-  const date = new Date(Date.UTC(year, month - 1, day));
-  return Number.isNaN(date.getTime()) ? null : date;
-};
-
-const startOfMonth = (date) =>
-  new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
-
-const shiftMonth = (date, amount) => {
-  const copy = new Date(date.getTime());
-  copy.setUTCMonth(copy.getUTCMonth() + amount);
-  return startOfMonth(copy);
-};
-
-const buildCalendarDays = (monthDate) => {
-  const start = startOfMonth(monthDate);
-  const startWeekday = (start.getUTCDay() + 6) % 7; // Monday as first day
-  const firstCell = new Date(start.getTime());
-  firstCell.setUTCDate(firstCell.getUTCDate() - startWeekday);
-
-  return Array.from({ length: 42 }, (_, index) => {
-    const current = new Date(firstCell.getTime());
-    current.setUTCDate(firstCell.getUTCDate() + index);
-    return current;
-  });
-};
 
 export default function StorePublicPage() {
   const { id } = useParams();
@@ -77,9 +57,6 @@ export default function StorePublicPage() {
   const [availability, setAvailability] = useState([]);
   const [availabilityLoading, setAvailabilityLoading] = useState(false);
   const [availabilityError, setAvailabilityError] = useState("");
-  const [calendarMonth, setCalendarMonth] = useState(() =>
-    startOfMonth(new Date())
-  );
 
   const [bookingForm, setBookingForm] = useState({
     customerName: "",
@@ -114,7 +91,6 @@ export default function StorePublicPage() {
   useEffect(() => {
     setAvailability([]);
     setAvailabilityError("");
-    setCalendarMonth(startOfMonth(new Date()));
     setBookingForm({
       customerName: "",
       customerEmail: "",
@@ -176,66 +152,7 @@ export default function StorePublicPage() {
       setAvailabilityLoading(true);
       setAvailabilityError("");
       const { data } = await getStoreAvailability(id);
-      const sanitized = Array.isArray(data?.availability)
-        ? data.availability
-            .map((entry) => {
-              const date = typeof entry?.date === "string" ? entry.date : "";
-              const slots = Array.isArray(entry?.slots)
-                ? entry.slots
-                    .map((slot) => {
-                      if (typeof slot === "string") {
-                        return { time: slot, booked: false };
-                      }
-                      if (slot && typeof slot.time === "string") {
-                        return {
-                          time: slot.time,
-                          booked: Boolean(slot.booked),
-                        };
-                      }
-                      return null;
-                    })
-                    .filter((slot) => Boolean(slot))
-                    .sort((a, b) => a.time.localeCompare(b.time))
-                : [];
-
-              return date && slots.length ? { date, slots } : null;
-            })
-            .filter((entry) => Boolean(entry))
-            .sort((a, b) => a.date.localeCompare(b.date))
-        : [];
-
-      setAvailability(sanitized);
-
-      if (sanitized.length === 0) {
-        setBookingForm((prev) => ({
-          ...prev,
-          date: "",
-          slot: "",
-        }));
-        setCalendarMonth(startOfMonth(new Date()));
-        return;
-      }
-
-      const hasSelected = sanitized.some(
-        (entry) => entry.date === bookingForm.date
-      );
-
-      const firstAvailable =
-        sanitized.find((entry) => entry.slots.some((slot) => !slot.booked)) ||
-        sanitized[0];
-
-      const targetDate = hasSelected ? bookingForm.date : firstAvailable.date;
-
-      setBookingForm((prev) => ({
-        ...prev,
-        date: targetDate,
-        slot: "",
-      }));
-
-      const parsed = parseIsoDate(targetDate);
-      if (parsed) {
-        setCalendarMonth(startOfMonth(parsed));
-      }
+      setAvailability(Array.isArray(data?.availability) ? data.availability : []);
     } catch (err) {
       console.error(err);
       setAvailability([]);
@@ -269,84 +186,33 @@ export default function StorePublicPage() {
     const { name, value } = e.target;
     setBookingForm((prev) => ({
       ...prev,
-      [name]: value,
+      [name]: name === "date" ? value : value,
+      ...(name === "date" ? { slot: "" } : {}),
     }));
     setBookingError("");
     setBookingMsg("");
   };
 
-  const availabilityMap = useMemo(() => {
-    const map = new Map();
-    availability.forEach((entry) => {
-      if (!entry?.date) return;
-      map.set(entry.date, Array.isArray(entry.slots) ? entry.slots : []);
-    });
-    return map;
-  }, [availability]);
-
-  const calendarDays = useMemo(() => {
-    const days = buildCalendarDays(calendarMonth);
-    return days.map((date) => {
-      const iso = date.toISOString().slice(0, 10);
-      const slots = availabilityMap.get(iso) || [];
-      const hasSlots = slots.length > 0;
-      const hasAvailable = slots.some((slot) => !slot.booked);
-      return {
-        date,
-        iso,
-        inCurrentMonth: date.getUTCMonth() === calendarMonth.getUTCMonth(),
-        hasSlots,
-        hasAvailable,
-      };
-    });
-  }, [availabilityMap, calendarMonth]);
-
-  const slotsForSelectedDay = useMemo(() => {
-    if (!bookingForm.date) return [];
-    const slots = availabilityMap.get(bookingForm.date);
-    return Array.isArray(slots) ? slots : [];
-  }, [availabilityMap, bookingForm.date]);
-
-  const selectedDateLabel = useMemo(() => {
-    const parsed = parseIsoDate(bookingForm.date);
-    return parsed ? calendarDateFormatter.format(parsed) : "";
+  const selectedDayKey = useMemo(() => {
+    if (!bookingForm.date) return null;
+    const date = new Date(bookingForm.date);
+    if (Number.isNaN(date.getTime())) return null;
+    const key = DAY_FROM_INDEX[date.getUTCDay()];
+    return key || null;
   }, [bookingForm.date]);
 
-  const formattedSelectedDateLabel = useMemo(() => {
-    if (!selectedDateLabel) return "";
-    return selectedDateLabel.charAt(0).toUpperCase() + selectedDateLabel.slice(1);
-  }, [selectedDateLabel]);
+  const sortedAvailability = useMemo(() => {
+    const order = Object.fromEntries(DAY_ORDER.map((day, index) => [day, index]));
+    return [...availability].sort(
+      (a, b) => (order[a.dayOfWeek] || 0) - (order[b.dayOfWeek] || 0)
+    );
+  }, [availability]);
 
-  const goToPreviousMonth = () => {
-    setCalendarMonth((prev) => shiftMonth(prev, -1));
-  };
-
-  const goToNextMonth = () => {
-    setCalendarMonth((prev) => shiftMonth(prev, 1));
-  };
-
-  const handleSelectDate = (iso) => {
-    if (!availabilityMap.has(iso)) {
-      return;
-    }
-    setBookingForm((prev) => ({
-      ...prev,
-      date: iso,
-      slot: "",
-    }));
-    setBookingError("");
-    setBookingMsg("");
-  };
-
-  const handleSelectSlot = (slot) => {
-    if (slot.booked) return;
-    setBookingForm((prev) => ({
-      ...prev,
-      slot: slot.time,
-    }));
-    setBookingError("");
-    setBookingMsg("");
-  };
+  const slotsForSelectedDay = useMemo(() => {
+    if (!selectedDayKey) return [];
+    const entry = availability.find((item) => item.dayOfWeek === selectedDayKey);
+    return entry ? entry.slots || [] : [];
+  }, [availability, selectedDayKey]);
 
   const submitBooking = async (e) => {
     e.preventDefault();
@@ -366,18 +232,8 @@ export default function StorePublicPage() {
       return;
     }
 
-    const slotIsAvailable = slotsForSelectedDay.some(
-      (slot) => slot.time === bookingForm.slot && !slot.booked
-    );
-
-    if (!slotIsAvailable) {
-      setBookingError("El horario seleccionado ya no está disponible");
-      return;
-    }
-
     try {
       setBookingSubmitting(true);
-      const selectedDateValue = bookingForm.date;
       await createAppointment(id, {
         customerName: bookingForm.customerName.trim(),
         customerEmail: bookingForm.customerEmail,
@@ -387,8 +243,6 @@ export default function StorePublicPage() {
         notes: bookingForm.notes,
       });
 
-      await loadAvailability();
-
       setBookingMsg(
         "Tu solicitud fue enviada. El negocio se pondrá en contacto para confirmar la cita."
       );
@@ -396,7 +250,7 @@ export default function StorePublicPage() {
         customerName: "",
         customerEmail: "",
         customerPhone: "",
-        date: selectedDateValue,
+        date: "",
         slot: "",
         notes: "",
       });
@@ -616,37 +470,11 @@ export default function StorePublicPage() {
         </section>
 
         {store.mode === "bookings" && (
-          <section className="bg-white rounded-2xl shadow-sm border p-6 grid gap-6 lg:grid-cols-[2fr,1.5fr]">
-            <div className="space-y-4">
-              <div className="flex items-center justify-between gap-3 flex-wrap">
-                <div>
-                  <h3 className="text-lg font-semibold text-slate-800">
-                    Calendario de disponibilidad
-                  </h3>
-                  <p className="text-sm text-slate-500">
-                    Revisa qué días tienen horarios publicados y selecciona el que más te acomode.
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={goToPreviousMonth}
-                    className="text-xs px-3 py-1 border border-slate-300 rounded-lg text-slate-600 hover:bg-slate-100"
-                  >
-                    Mes anterior
-                  </button>
-                  <span className="text-sm font-medium text-slate-700 capitalize">
-                    {calendarMonthFormatter.format(calendarMonth)}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={goToNextMonth}
-                    className="text-xs px-3 py-1 border border-slate-300 rounded-lg text-slate-600 hover:bg-slate-100"
-                  >
-                    Mes siguiente
-                  </button>
-                </div>
-              </div>
+          <section className="bg-white rounded-2xl shadow-sm border p-6 grid gap-6 md:grid-cols-2">
+            <div className="space-y-3">
+              <h3 className="text-lg font-semibold text-slate-800">
+                Horarios disponibles
+              </h3>
 
               {availabilityLoading ? (
                 <p className="text-sm text-slate-500">Cargando horarios…</p>
@@ -654,109 +482,32 @@ export default function StorePublicPage() {
                 <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
                   {availabilityError}
                 </p>
-              ) : availability.length === 0 ? (
+              ) : sortedAvailability.length === 0 ? (
                 <p className="text-sm text-slate-500">
-                  El negocio aún no ha publicado horarios disponibles. Vuelve pronto para agendar tu cita.
+                  El negocio aún no ha publicado horarios disponibles. Intenta nuevamente más tarde.
                 </p>
               ) : (
-                <div className="space-y-4">
-                  <div>
-                    <div className="grid grid-cols-7 text-[11px] font-medium text-slate-500 uppercase tracking-wide mb-2">
-                      {WEEKDAY_LABELS.map((label) => (
-                        <span key={label} className="text-center">
-                          {label}
-                        </span>
-                      ))}
-                    </div>
-                    <div className="grid grid-cols-7 gap-1">
-                      {calendarDays.map((day) => {
-                        const isSelected = bookingForm.date === day.iso;
-                        const baseClasses = "w-full aspect-square flex flex-col items-center justify-center rounded-lg border text-xs transition";
-                        const stateClasses = !day.hasSlots
-                          ? "border-slate-100 text-slate-300 cursor-not-allowed"
-                          : isSelected
-                          ? "border-blue-600 bg-blue-600 text-white shadow"
-                          : day.hasAvailable
-                          ? "border-blue-400 bg-blue-50 text-blue-700 hover:border-blue-500"
-                          : "border-amber-300 bg-amber-50 text-amber-700";
-                        const monthClass = day.inCurrentMonth ? "" : "opacity-40";
-
-                        return (
-                          <button
-                            key={day.iso}
-                            type="button"
-                            onClick={() => handleSelectDate(day.iso)}
-                            disabled={!day.hasSlots}
-                            className={`${baseClasses} ${stateClasses} ${monthClass}`}
-                          >
-                            <span className="text-base font-semibold">
-                              {day.date.getUTCDate()}
-                            </span>
-                            <span className="text-[10px] mt-1">
-                              {day.hasAvailable
-                                ? "Disponible"
-                                : day.hasSlots
-                                ? "Sin cupos"
-                                : ""}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <h4 className="text-sm font-semibold text-slate-700">
-                      {formattedSelectedDateLabel
-                        ? formattedSelectedDateLabel
-                        : "Selecciona un día del calendario"}
-                    </h4>
-                    {!bookingForm.date ? (
-                      <p className="text-sm text-slate-500">
-                        Haz clic en un día con disponibilidad para ver los horarios.
-                      </p>
-                    ) : slotsForSelectedDay.length === 0 ? (
-                      <p className="text-sm text-slate-500">
-                        Ese día no tiene horarios disponibles por el momento.
-                      </p>
-                    ) : (
+                <div className="space-y-2">
+                  {sortedAvailability.map((entry) => (
+                    <div
+                      key={entry.dayOfWeek}
+                      className="border border-slate-200 rounded-xl px-4 py-3"
+                    >
+                      <h4 className="font-semibold text-slate-700 mb-2">
+                        {DAY_LABELS[entry.dayOfWeek] || entry.dayOfWeek}
+                      </h4>
                       <div className="flex flex-wrap gap-2">
-                        {slotsForSelectedDay.map((slot) => {
-                          const isSlotSelected = bookingForm.slot === slot.time;
-                          const slotClasses = slot.booked
-                            ? "px-3 py-1 rounded-full text-xs border border-amber-300 bg-amber-50 text-amber-700 cursor-not-allowed"
-                            : isSlotSelected
-                            ? "px-3 py-1 rounded-full text-xs border border-blue-600 bg-blue-600 text-white"
-                            : "px-3 py-1 rounded-full text-xs border border-slate-300 bg-slate-100 text-slate-700 hover:border-blue-400 hover:text-blue-700";
-
-                          return (
-                            <button
-                              key={slot.time}
-                              type="button"
-                              onClick={() => handleSelectSlot(slot)}
-                              disabled={slot.booked}
-                              className={slotClasses}
-                            >
-                              {slot.time}
-                              {slot.booked && " · Reservado"}
-                            </button>
-                          );
-                        })}
+                        {(entry.slots || []).map((slot) => (
+                          <span
+                            key={`${entry.dayOfWeek}-${slot}`}
+                            className="bg-slate-100 text-slate-700 text-xs px-3 py-1 rounded-full"
+                          >
+                            {slot}
+                          </span>
+                        ))}
                       </div>
-                    )}
-
-                    <div className="flex flex-wrap gap-3 text-[11px] text-slate-500">
-                      <span className="inline-flex items-center gap-1">
-                        <span className="h-2 w-2 rounded-full bg-blue-500" /> Disponible
-                      </span>
-                      <span className="inline-flex items-center gap-1">
-                        <span className="h-2 w-2 rounded-full bg-blue-900" /> Seleccionado
-                      </span>
-                      <span className="inline-flex items-center gap-1">
-                        <span className="h-2 w-2 rounded-full bg-amber-500" /> Reservado
-                      </span>
                     </div>
-                  </div>
+                  ))}
                 </div>
               )}
             </div>
@@ -826,35 +577,40 @@ export default function StorePublicPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-medium text-slate-600 mb-1">
-                      Fecha seleccionada
+                      Fecha
                     </label>
                     <input
-                      value={
-                        formattedSelectedDateLabel
-                          ? formattedSelectedDateLabel
-                          : "Selecciona un día en el calendario"
-                      }
-                      readOnly
-                      className="w-full border rounded-lg px-3 py-2 bg-slate-100 text-slate-600"
+                      type="date"
+                      name="date"
+                      value={bookingForm.date}
+                      onChange={onBookingChange}
+                      className="w-full border rounded-lg px-3 py-2"
                     />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-slate-600 mb-1">
-                      Horario seleccionado
+                      Horario disponible
                     </label>
-                    <input
-                      value={
-                        bookingForm.slot
-                          ? `${bookingForm.slot} hrs`
-                          : !bookingForm.date
-                          ? "Selecciona un día"
-                          : slotsForSelectedDay.length === 0
-                          ? "Sin horarios disponibles"
-                          : "Elige un horario disponible"
-                      }
-                      readOnly
-                      className="w-full border rounded-lg px-3 py-2 bg-slate-100 text-slate-600"
-                    />
+                    <select
+                      name="slot"
+                      value={bookingForm.slot}
+                      onChange={onBookingChange}
+                      className="w-full border rounded-lg px-3 py-2"
+                      disabled={!bookingForm.date || slotsForSelectedDay.length === 0}
+                    >
+                      <option value="">
+                        {bookingForm.date
+                          ? slotsForSelectedDay.length > 0
+                            ? "Selecciona un horario"
+                            : "No hay horarios disponibles"
+                          : "Elige una fecha"}
+                      </option>
+                      {slotsForSelectedDay.map((slot) => (
+                        <option key={slot} value={slot}>
+                          {slot}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
 

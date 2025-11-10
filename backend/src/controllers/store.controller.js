@@ -4,31 +4,27 @@ import Product from "../models/product.model.js";
 import Booking from "../models/booking.model.js";
 import Order from "../models/order.model.js";
 
+const DAY_ORDER = [
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+  "sunday",
+];
+
+const DAY_FROM_INDEX = {
+  0: "sunday",
+  1: "monday",
+  2: "tuesday",
+  3: "wednesday",
+  4: "thursday",
+  5: "friday",
+  6: "saturday",
+};
+
 const SLOT_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
-
-const normalizeSlotValue = (slot) => {
-  if (!slot) return "";
-  const value = typeof slot === "string" ? slot.trim() : slot?.time?.trim?.();
-  if (!value || !SLOT_REGEX.test(value)) {
-    return "";
-  }
-  const [hours, minutes] = value.split(":");
-  const normalizedHours = hours.padStart(2, "0");
-  return `${normalizedHours}:${minutes}`;
-};
-
-const normalizeAvailabilityDate = (value) => {
-  if (!value) return null;
-  if (value instanceof Date) {
-    const date = new Date(value.getTime());
-    if (Number.isNaN(date.getTime())) {
-      return null;
-    }
-    date.setUTCHours(0, 0, 0, 0);
-    return date;
-  }
-  return normalizeDateOnly(value);
-};
 
 const normalizeAvailability = (availability = []) => {
   if (!Array.isArray(availability)) return [];
@@ -36,39 +32,25 @@ const normalizeAvailability = (availability = []) => {
   const map = new Map();
 
   availability.forEach((entry) => {
-    const normalizedDate = normalizeAvailabilityDate(entry?.date || entry?.day);
+    const day = entry?.dayOfWeek;
     const slots = Array.isArray(entry?.slots) ? entry.slots : [];
-
-    if (!normalizedDate) {
-      return;
-    }
+    if (!DAY_ORDER.includes(day)) return;
 
     const cleanSlots = Array.from(
       new Set(
         slots
-          .map((slot) => normalizeSlotValue(slot))
-          .filter((slot) => Boolean(slot))
+          .filter((slot) => typeof slot === "string" && SLOT_REGEX.test(slot.trim()))
+          .map((slot) => slot.trim())
       )
     ).sort();
 
-    if (cleanSlots.length === 0) {
-      return;
-    }
-
-    const key = normalizedDate.toISOString();
-    if (!map.has(key)) {
-      map.set(key, { date: normalizedDate, slots: cleanSlots });
-    } else {
-      const existing = map.get(key);
-      const mergedSlots = Array.from(
-        new Set([...(existing?.slots || []), ...cleanSlots])
-      ).sort();
-
-      map.set(key, { date: normalizedDate, slots: mergedSlots });
-    }
+    map.set(day, cleanSlots);
   });
 
-  return Array.from(map.values()).sort((a, b) => a.date - b.date);
+  return DAY_ORDER.filter((day) => map.has(day)).map((day) => ({
+    dayOfWeek: day,
+    slots: map.get(day),
+  }));
 };
 
 const normalizeDateOnly = (dateString) => {
@@ -78,40 +60,6 @@ const normalizeDateOnly = (dateString) => {
   }
   date.setUTCHours(0, 0, 0, 0);
   return date;
-};
-
-const buildAvailabilityResponse = async (storeId, availabilityEntries = []) => {
-  if (!availabilityEntries.length) {
-    return [];
-  }
-
-  const dates = availabilityEntries.map((entry) => entry.date);
-  const bookings = await Booking.find({
-    store: storeId,
-    date: { $in: dates },
-    status: { $ne: "cancelled" },
-  })
-    .select({ date: 1, slot: 1 })
-    .lean();
-
-  const bookedSet = new Set(
-    bookings.map(
-      (booking) => `${booking.date.toISOString()}|${normalizeSlotValue(booking.slot)}`
-    )
-  );
-
-  return availabilityEntries.map((entry) => {
-    const dateIso = entry.date.toISOString();
-    const dateKey = dateIso.slice(0, 10);
-
-    return {
-      date: dateKey,
-      slots: entry.slots.map((slot) => ({
-        time: slot,
-        booked: bookedSet.has(`${dateIso}|${slot}`),
-      })),
-    };
-  });
 };
 
 const findStoreForOwner = async (storeId, userId) => {
@@ -317,10 +265,7 @@ export const getStoreAvailability = async (req, res) => {
         .json({ message: "Esta tienda no permite agendar citas" });
     }
 
-    const normalized = normalizeAvailability(store.bookingAvailability);
-    const availability = await buildAvailabilityResponse(store._id, normalized);
-
-    res.json({ availability });
+    res.json({ availability: store.bookingAvailability || [] });
   } catch (err) {
     console.error("Error obteniendo disponibilidad:", err);
     res.status(500).json({ message: "Error al obtener la disponibilidad" });
@@ -345,15 +290,10 @@ export const updateStoreAvailability = async (req, res) => {
     }
 
     const normalized = normalizeAvailability(req.body?.availability);
-    store.bookingAvailability = normalized.map((entry) => ({
-      date: entry.date,
-      slots: entry.slots,
-    }));
+    store.bookingAvailability = normalized;
     await store.save();
 
-    const availability = await buildAvailabilityResponse(store._id, normalized);
-
-    res.json({ availability });
+    res.json({ availability: store.bookingAvailability });
   } catch (err) {
     console.error("Error al actualizar disponibilidad:", err);
     res.status(500).json({ message: "Error al actualizar la disponibilidad" });
@@ -431,35 +371,20 @@ export const createAppointment = async (req, res) => {
       return res.status(400).json({ message: "La fecha proporcionada no es válida" });
     }
 
-    const normalizedSlot = normalizeSlotValue(slot);
-
-    if (!normalizedSlot) {
+    if (!SLOT_REGEX.test(slot)) {
       return res.status(400).json({ message: "El horario no es válido" });
     }
 
-    const availability = normalizeAvailability(store.bookingAvailability);
-    const dayAvailability = availability.find(
-      (entry) => entry.date.getTime() === normalizedDate.getTime()
+    const dayKey = DAY_FROM_INDEX[normalizedDate.getUTCDay()];
+
+    const dayAvailability = (store.bookingAvailability || []).find(
+      (entry) => entry.dayOfWeek === dayKey
     );
 
-    if (!dayAvailability || !dayAvailability.slots.includes(normalizedSlot)) {
+    if (!dayAvailability || !dayAvailability.slots.includes(slot)) {
       return res
         .status(400)
         .json({ message: "El horario seleccionado no está disponible" });
-    }
-
-    const slotAlreadyBooked = await Booking.findOne({
-      store: store._id,
-      date: normalizedDate,
-      slot: normalizedSlot,
-    })
-      .select({ _id: 1 })
-      .lean();
-
-    if (slotAlreadyBooked) {
-      return res
-        .status(409)
-        .json({ message: "Ese horario ya fue reservado. Elige otro." });
     }
 
     try {
@@ -469,7 +394,7 @@ export const createAppointment = async (req, res) => {
         customerEmail,
         customerPhone,
         date: normalizedDate,
-        slot: normalizedSlot,
+        slot,
         notes: notes || "",
       });
 
