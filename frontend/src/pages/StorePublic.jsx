@@ -10,6 +10,9 @@ import {
 } from "../api/store";
 import MainHeader from "../components/MainHeader";
 
+import Calendar from "react-calendar";
+import "react-calendar/dist/Calendar.css";
+
 const DAY_LABELS = {
   monday: "Lunes",
   tuesday: "Martes",
@@ -88,6 +91,7 @@ export default function StorePublicPage() {
   const [orderError, setOrderError] = useState("");
   const [orderMsg, setOrderMsg] = useState("");
 
+  // reset cuando cambia la tienda
   useEffect(() => {
     setAvailability([]);
     setAvailabilityError("");
@@ -101,6 +105,7 @@ export default function StorePublicPage() {
     });
     setBookingError("");
     setBookingMsg("");
+
     setProducts([]);
     setProductsError("");
     setOrderItems([]);
@@ -117,6 +122,7 @@ export default function StorePublicPage() {
     setSelectedQuantity(1);
   }, [id]);
 
+  // cargar info básica de la tienda
   useEffect(() => {
     const loadStore = async () => {
       try {
@@ -133,9 +139,9 @@ export default function StorePublicPage() {
     };
 
     loadStore();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  // cargar según modo
   useEffect(() => {
     if (!store?.mode) return;
 
@@ -144,7 +150,6 @@ export default function StorePublicPage() {
     } else if (store.mode === "products") {
       loadProducts();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [store?.mode, id]);
 
   const loadAvailability = async () => {
@@ -165,33 +170,59 @@ export default function StorePublicPage() {
   };
 
   const loadProducts = async () => {
-    try {
-      setProductsLoading(true);
-      setProductsError("");
-      const { data } = await listStoreProducts(id);
-      setProducts(Array.isArray(data) ? data : []);
-      setSelectedProductId((Array.isArray(data) && data[0]?._id) || "");
-    } catch (err) {
-      console.error(err);
-      setProducts([]);
-      setProductsError(
-        err?.response?.data?.message || "No se pudo cargar el catálogo"
-      );
-    } finally {
-      setProductsLoading(false);
-    }
-  };
+  try {
+    setProductsLoading(true);
+    setProductsError("");
+    const { data } = await listStoreProducts(id);
+
+    // 👇 LOG para ver exactamente qué viene del backend
+    console.log("API productos tienda pública:", data);
+
+    // de momento dejamos esto igual
+    setProducts(Array.isArray(data) ? data : []);
+    setSelectedProductId((Array.isArray(data) && data[0]?._id) || "");
+  } catch (err) {
+    console.error(err);
+    setProducts([]);
+    setProductsError(
+      err?.response?.data?.message || "No se pudo cargar el catálogo"
+    );
+  } finally {
+    setProductsLoading(false);
+  }
+};
+
+
+  // --------- AGENDAMIENTO ----------
 
   const onBookingChange = (e) => {
     const { name, value } = e.target;
     setBookingForm((prev) => ({
       ...prev,
-      [name]: name === "date" ? value : value,
-      ...(name === "date" ? { slot: "" } : {}),
+      [name]: value,
     }));
     setBookingError("");
     setBookingMsg("");
   };
+
+  const handleCalendarChange = (value) => {
+    if (!value) return;
+    const iso = value.toISOString().slice(0, 10);
+    setBookingForm((prev) => ({
+      ...prev,
+      date: iso,
+      slot: "",
+    }));
+    setBookingError("");
+    setBookingMsg("");
+  };
+
+  const calendarValue = useMemo(() => {
+    if (!bookingForm.date) return new Date();
+    const d = new Date(bookingForm.date);
+    if (Number.isNaN(d.getTime())) return new Date();
+    return d;
+  }, [bookingForm.date]);
 
   const selectedDayKey = useMemo(() => {
     if (!bookingForm.date) return null;
@@ -224,7 +255,7 @@ export default function StorePublicPage() {
       return;
     }
     if (!bookingForm.date) {
-      setBookingError("Selecciona una fecha");
+      setBookingError("Selecciona una fecha en el calendario");
       return;
     }
     if (!bookingForm.slot) {
@@ -257,12 +288,28 @@ export default function StorePublicPage() {
     } catch (err) {
       console.error(err);
       setBookingError(
-        err?.response?.data?.message || "No pudimos reservar tu cita. Intenta nuevamente"
+        err?.response?.data?.message ||
+          "No pudimos reservar tu cita. Intenta nuevamente"
       );
     } finally {
       setBookingSubmitting(false);
     }
   };
+
+  const hasAvailabilityForDate = (date) => {
+    const key = DAY_FROM_INDEX[date.getUTCDay()];
+    const entry = availability.find((item) => item.dayOfWeek === key);
+    return entry && entry.slots && entry.slots.length > 0;
+  };
+
+  const getCalendarTileClass = ({ date, view }) => {
+    if (view !== "month") return null;
+    const hasSlots = hasAvailabilityForDate(date);
+    if (!hasSlots) return "react-calendar__tile--no-availability";
+    return "react-calendar__tile--has-availability";
+  };
+
+  // --------- PEDIDOS (PRODUCTOS) ----------
 
   const onOrderFormChange = (e) => {
     const { name, value } = e.target;
@@ -307,11 +354,6 @@ export default function StorePublicPage() {
     setOrderMsg("");
   };
 
-  const handleAddToOrder = (e) => {
-    e.preventDefault();
-    addOrderItem(selectedProductId, selectedQuantity);
-  };
-
   const handleQuickAdd = (productId) => {
     addOrderItem(productId, 1);
   };
@@ -334,13 +376,12 @@ export default function StorePublicPage() {
     setOrderError("");
     setOrderMsg("");
 
-    if (!orderForm.customerName.trim()) {
-      setOrderError("Ingresa tu nombre para realizar el pedido");
-      return;
-    }
-
     if (orderItems.length === 0) {
       setOrderError("Agrega al menos un producto a tu pedido");
+      return;
+    }
+    if (!orderForm.customerName.trim()) {
+      setOrderError("Ingresa tu nombre para enviar el pedido");
       return;
     }
 
@@ -359,7 +400,7 @@ export default function StorePublicPage() {
       });
 
       setOrderMsg(
-        "Tu pedido fue enviado. El negocio te contactará para coordinar la entrega."
+        "Tu pedido fue enviado. El negocio se pondrá en contacto para coordinar el pago y la entrega."
       );
       setOrderItems([]);
       setOrderForm({
@@ -369,17 +410,23 @@ export default function StorePublicPage() {
         customerAddress: "",
         notes: "",
       });
-      setSelectedProductId(products[0]?._id || "");
-      setSelectedQuantity(1);
     } catch (err) {
       console.error(err);
       setOrderError(
-        err?.response?.data?.message || "No pudimos registrar tu pedido. Intenta nuevamente"
+        err?.response?.data?.message ||
+          "No pudimos enviar tu pedido. Intenta nuevamente"
       );
     } finally {
       setOrderSubmitting(false);
     }
   };
+
+  // --------- COLORES / PERSONALIZACIÓN ----------
+
+  const primaryColor = store?.primaryColor || "#2563eb";
+  const accentColor = store?.accentColor || "#0f172a";
+
+  // --------- ESTADOS DE CARGA / ERROR ----------
 
   if (loading)
     return (
@@ -407,12 +454,18 @@ export default function StorePublicPage() {
       </div>
     );
 
+  // --------- RENDER ----------
+
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col">
       <MainHeader subtitle={`Negocio: ${store.name}`} />
 
       <main className="flex-1 max-w-5xl mx-auto px-4 py-8 space-y-6">
-        <section className="bg-white rounded-2xl shadow-sm border p-6 flex flex-col md:flex-row gap-6">
+        {/* HEADER / HERO DE LA TIENDA */}
+        <section
+          className="bg-white rounded-2xl shadow-sm border p-6 flex flex-col md:flex-row gap-6"
+          style={{ borderColor: primaryColor }}
+        >
           <div className="flex-shrink-0">
             {store.logoUrl ? (
               <img
@@ -428,20 +481,72 @@ export default function StorePublicPage() {
           </div>
 
           <div className="flex-1 space-y-2">
-            <h2 className="text-2xl font-semibold text-slate-800">{store.name}</h2>
-            <p className="text-slate-600 text-sm">
-              {store.description || "Sin descripción."}
-            </p>
+            <h2
+              className="text-2xl font-semibold"
+              style={{ color: accentColor }}
+            >
+              {store.name}
+            </h2>
+
+            {store.heroTitle && (
+              <p className="text-slate-800 text-sm font-semibold">
+                {store.heroTitle}
+              </p>
+            )}
+
+            {store.heroSubtitle && (
+              <p className="text-slate-600 text-sm">{store.heroSubtitle}</p>
+            )}
+
+            {!store.heroTitle && !store.heroSubtitle && (
+              <p className="text-slate-600 text-sm">
+                {store.description || "Sin descripción."}
+              </p>
+            )}
+
             <p className="text-xs text-slate-500">
-              {store.tipoNegocio || "Negocio"} · {store.comuna || "Ubicación desconocida"}
+              {store.tipoNegocio || "Negocio"} ·{" "}
+              {store.comuna || "Ubicación desconocida"}
             </p>
 
             {store.direccion && (
               <p className="text-sm text-slate-700 mt-1">📍 {store.direccion}</p>
             )}
 
+            {(store.highlight1 || store.highlight2 || store.priceFrom) && (
+              <div className="flex flex-wrap gap-2 mt-2 text-xs">
+                {store.highlight1 && (
+                  <span
+                    className="px-2 py-1 rounded-full border text-slate-700"
+                    style={{ borderColor: primaryColor }}
+                  >
+                    {store.highlight1}
+                  </span>
+                )}
+                {store.highlight2 && (
+                  <span
+                    className="px-2 py-1 rounded-full border text-slate-700"
+                    style={{ borderColor: primaryColor }}
+                  >
+                    {store.highlight2}
+                  </span>
+                )}
+                {store.priceFrom && (
+                  <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-800">
+                    {store.priceFrom}
+                  </span>
+                )}
+              </div>
+            )}
+
             {store.mode && (
-              <span className="inline-block text-xs uppercase tracking-wide bg-slate-100 text-slate-700 px-3 py-1 rounded-full">
+              <span
+                className="inline-block text-xs uppercase tracking-wide px-3 py-1 rounded-full mt-3"
+                style={{
+                  backgroundColor: `${primaryColor}15`,
+                  color: primaryColor,
+                }}
+              >
                 {store.mode === "bookings"
                   ? "Agendamiento de citas"
                   : "Venta de productos"}
@@ -462,18 +567,22 @@ export default function StorePublicPage() {
                   </div>
                 )}
                 <p className="text-sm text-slate-600">
-                  Dueño: <span className="font-medium text-slate-800">{store.ownerName}</span>
+                  Dueño:{" "}
+                  <span className="font-medium text-slate-800">
+                    {store.ownerName}
+                  </span>
                 </p>
               </div>
             )}
           </div>
         </section>
 
+        {/* MODO AGENDAMIENTO */}
         {store.mode === "bookings" && (
-          <section className="bg-white rounded-2xl shadow-sm border p-6 grid gap-6 md:grid-cols-2">
+          <section className="bg-white rounded-2xl shadow-sm border p-6 grid gap-6 md:grid-cols-[1.1fr,1.4fr]">
             <div className="space-y-3">
               <h3 className="text-lg font-semibold text-slate-800">
-                Horarios disponibles
+                Horarios disponibles esta semana
               </h3>
 
               {availabilityLoading ? (
@@ -484,14 +593,15 @@ export default function StorePublicPage() {
                 </p>
               ) : sortedAvailability.length === 0 ? (
                 <p className="text-sm text-slate-500">
-                  El negocio aún no ha publicado horarios disponibles. Intenta nuevamente más tarde.
+                  El negocio aún no ha publicado horarios disponibles. Intenta
+                  nuevamente más tarde.
                 </p>
               ) : (
                 <div className="space-y-2">
                   {sortedAvailability.map((entry) => (
                     <div
                       key={entry.dayOfWeek}
-                      className="border border-slate-200 rounded-xl px-4 py-3"
+                      className="border border-slate-200 rounded-xl px-4 py-3 bg-slate-50/60"
                     >
                       <h4 className="font-semibold text-slate-700 mb-2">
                         {DAY_LABELS[entry.dayOfWeek] || entry.dayOfWeek}
@@ -517,7 +627,8 @@ export default function StorePublicPage() {
                 Agenda tu cita
               </h3>
               <p className="text-sm text-slate-500">
-                Completa el formulario y nos pondremos en contacto para confirmar tu reserva.
+                Elige una fecha en el calendario y un horario disponible. La
+                reserva se guarda automáticamente para evitar duplicados.
               </p>
 
               {bookingError && (
@@ -532,86 +643,108 @@ export default function StorePublicPage() {
                 </p>
               )}
 
-              <form onSubmit={submitBooking} className="space-y-3 text-sm">
-                <div>
+              <form onSubmit={submitBooking} className="space-y-4 text-sm">
+                <div className="grid gap-4 md:grid-cols-2 items-start">
+                  <div className="space-y-2">
+                    <Calendar
+                      onChange={handleCalendarChange}
+                      value={calendarValue}
+                      tileClassName={getCalendarTileClass}
+                      className="rounded-2xl border border-slate-200 shadow-sm p-2 bg-slate-50/60"
+                    />
+                    <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-500">
+                      <div className="flex items-center gap-1">
+                        <span className="inline-block w-3 h-3 rounded-full bg-emerald-200 border border-emerald-400" />
+                        <span>Con horarios disponibles</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="inline-block w-3 h-3 rounded-full bg-slate-200" />
+                        <span>Sin disponibilidad</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="inline-block w-3 h-3 rounded-full border border-sky-500" />
+                        <span>Hoy</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">
+                        Nombre completo
+                      </label>
+                      <input
+                        name="customerName"
+                        value={bookingForm.customerName}
+                        onChange={onBookingChange}
+                        className="w-full border rounded-lg px-3 py-2"
+                        placeholder="Tu nombre"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">
+                        Correo electrónico
+                      </label>
+                      <input
+                        name="customerEmail"
+                        value={bookingForm.customerEmail}
+                        onChange={onBookingChange}
+                        className="w-full border rounded-lg px-3 py-2"
+                        placeholder="tucorreo@example.com"
+                        type="email"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">
+                        Teléfono
+                      </label>
+                      <input
+                        name="customerPhone"
+                        value={bookingForm.customerPhone}
+                        onChange={onBookingChange}
+                        className="w-full border rounded-lg px-3 py-2"
+                        placeholder="+56 9 ..."
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
                   <label className="block text-xs font-medium text-slate-600 mb-1">
-                    Nombre completo
+                    Horarios disponibles para el día elegido
                   </label>
-                  <input
-                    name="customerName"
-                    value={bookingForm.customerName}
-                    onChange={onBookingChange}
-                    className="w-full border rounded-lg px-3 py-2"
-                    placeholder="Tu nombre"
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">
-                      Correo electrónico
-                    </label>
-                    <input
-                      name="customerEmail"
-                      value={bookingForm.customerEmail}
-                      onChange={onBookingChange}
-                      className="w-full border rounded-lg px-3 py-2"
-                      placeholder="tucorreo@example.com"
-                      type="email"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">
-                      Teléfono
-                    </label>
-                    <input
-                      name="customerPhone"
-                      value={bookingForm.customerPhone}
-                      onChange={onBookingChange}
-                      className="w-full border rounded-lg px-3 py-2"
-                      placeholder="+56 9 ..."
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">
-                      Fecha
-                    </label>
-                    <input
-                      type="date"
-                      name="date"
-                      value={bookingForm.date}
-                      onChange={onBookingChange}
-                      className="w-full border rounded-lg px-3 py-2"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">
-                      Horario disponible
-                    </label>
-                    <select
-                      name="slot"
-                      value={bookingForm.slot}
-                      onChange={onBookingChange}
-                      className="w-full border rounded-lg px-3 py-2"
-                      disabled={!bookingForm.date || slotsForSelectedDay.length === 0}
-                    >
-                      <option value="">
-                        {bookingForm.date
-                          ? slotsForSelectedDay.length > 0
-                            ? "Selecciona un horario"
-                            : "No hay horarios disponibles"
-                          : "Elige una fecha"}
-                      </option>
-                      {slotsForSelectedDay.map((slot) => (
-                        <option key={slot} value={slot}>
-                          {slot}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  {bookingForm.date ? (
+                    slotsForSelectedDay.length === 0 ? (
+                      <p className="text-xs text-slate-500">
+                        No hay horarios configurados para este día.
+                      </p>
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        {slotsForSelectedDay.map((slot) => (
+                          <button
+                            type="button"
+                            key={slot}
+                            onClick={() =>
+                              setBookingForm((prev) => ({ ...prev, slot }))
+                            }
+                            className={`px-3 py-1 rounded-full text-xs border transition-all ${
+                              bookingForm.slot === slot
+                                ? "bg-blue-600 text-white border-blue-600 shadow-sm"
+                                : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                            }`}
+                          >
+                            {slot}
+                          </button>
+                        ))}
+                      </div>
+                    )
+                  ) : (
+                    <p className="text-xs text-slate-500">
+                      Elige primero una fecha en el calendario.
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -640,275 +773,247 @@ export default function StorePublicPage() {
           </section>
         )}
 
+        {/* MODO PRODUCTOS */}
         {store.mode === "products" && (
-          <>
-            <section className="bg-white rounded-2xl shadow-sm border p-6 space-y-4">
-              <div className="flex items-center justify-between flex-wrap gap-2">
+          <section className="bg-white rounded-2xl shadow-sm border p-6 space-y-8">
+            {/* CATÁLOGO */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
                 <div>
                   <h3 className="text-lg font-semibold text-slate-800">
                     Catálogo de productos
                   </h3>
                   <p className="text-sm text-slate-500">
-                    Revisa los productos disponibles y agrega los que quieras comprar a tu pedido.
+                    Revisa los productos disponibles y agrega los que quieras
+                    comprar a tu pedido.
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={loadProducts}
-                  className="text-sm text-blue-600 hover:underline"
-                >
-                  Actualizar catálogo
-                </button>
               </div>
 
               {productsLoading ? (
-                <p className="text-sm text-slate-500">Cargando productos…</p>
+                <p className="text-sm text-slate-500">Cargando catálogo…</p>
               ) : productsError ? (
                 <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
                   {productsError}
                 </p>
               ) : products.length === 0 ? (
                 <p className="text-sm text-slate-500">
-                  Este negocio aún no ha publicado productos. Vuelve pronto.
+                  Este negocio aún no ha publicado productos. Intenta nuevamente
+                  más tarde.
                 </p>
               ) : (
                 <div className="grid gap-4 md:grid-cols-2">
-                  {products.map((product) => (
-                    <article
-                      key={product._id}
-                      className="border border-slate-200 rounded-xl p-4 space-y-2"
-                    >
-                      {product.images?.[0] ? (
-                        <img
-                          src={product.images[0]}
-                          alt={product.name}
-                          className="h-40 w-full object-cover rounded-lg border"
-                        />
-                      ) : (
-                        <div className="h-40 w-full bg-slate-100 rounded-lg flex items-center justify-center text-slate-500 text-sm">
-                          Sin imagen
-                        </div>
-                      )}
+                  {products.map((product) => {
+                    const imageSrc =
+  product.imageUrl || product.image || (product.images?.[0] ?? null);
 
-                      <div className="space-y-1">
-                        <h4 className="font-semibold text-slate-800">
-                          {product.name}
-                        </h4>
-                        <p className="text-sm text-slate-600">
-                          {product.description || "Sin descripción"}
-                        </p>
-                        <p className="text-sm font-semibold text-slate-800">
-                          {currencyFormatter.format(Number(product.price) || 0)}
-                        </p>
-                      </div>
 
-                      <button
-                        type="button"
-                        onClick={() => handleQuickAdd(product._id)}
-                        className="text-sm text-blue-600 hover:underline"
+                    return (
+                      <article
+                        key={product._id}
+                        className="border border-slate-200 rounded-2xl overflow-hidden flex flex-col bg-slate-50/60"
                       >
-                        Agregar al pedido
-                      </button>
-                    </article>
-                  ))}
+                        <div className="h-56 bg-slate-100 flex items-center justify-center">
+                          {imageSrc ? (
+                            <img
+                              src={imageSrc}
+                              alt={product.name}
+                              className="w-full h-full object-contain"
+                            />
+                          ) : (
+                            <div className="flex items-center justify-center h-full text-xs text-slate-400">
+                              Sin imagen
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="p-4 space-y-1 flex-1 flex flex-col">
+                          <h4 className="font-semibold text-slate-800 text-sm">
+                            {product.name}
+                          </h4>
+                          {product.description && (
+                            <p className="text-xs text-slate-500 line-clamp-2">
+                              {product.description}
+                            </p>
+                          )}
+                          <p className="mt-2 font-semibold text-emerald-600 text-sm">
+                            {currencyFormatter.format(product.price || 0)}
+                          </p>
+
+                          <div className="mt-3">
+                            <button
+                              type="button"
+                              onClick={() => handleQuickAdd(product._id)}
+                              className="w-full bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-medium py-2 rounded-lg transition-colors"
+                            >
+                              Agregar al pedido
+                            </button>
+                          </div>
+                        </div>
+                      </article>
+                    );
+                  })}
                 </div>
               )}
-            </section>
+            </div>
 
-            <section className="bg-white rounded-2xl shadow-sm border p-6 space-y-4">
+            {/* PEDIDO */}
+            <div className="border-t border-slate-200 pt-6 space-y-4">
               <h3 className="text-lg font-semibold text-slate-800">
                 Completa tu pedido
               </h3>
-              <p className="text-sm text-slate-500">
-                Selecciona los productos que deseas y deja tus datos para que el negocio te contacte.
-              </p>
 
-              <form onSubmit={handleAddToOrder} className="grid gap-3 md:grid-cols-3 text-sm">
-                <div className="md:col-span-2">
-                  <label className="block text-xs font-medium text-slate-600 mb-1">
-                    Producto
-                  </label>
-                  <select
-                    value={selectedProductId}
-                    onChange={(e) => setSelectedProductId(e.target.value)}
-                    className="w-full border rounded-lg px-3 py-2"
-                    disabled={products.length === 0}
-                  >
-                    {products.length === 0 ? (
-                      <option value="">No hay productos disponibles</option>
-                    ) : (
-                      products.map((product) => (
-                        <option key={product._id} value={product._id}>
-                          {product.name} · {currencyFormatter.format(Number(product.price) || 0)}
-                        </option>
-                      ))
-                    )}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">
-                    Cantidad
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={selectedQuantity}
-                    onChange={(e) =>
-                      setSelectedQuantity(
-                        Math.max(1, Math.floor(Number(e.target.value) || 1))
-                      )
-                    }
-                    className="w-full border rounded-lg px-3 py-2"
-                    disabled={products.length === 0}
-                  />
-                </div>
-                <div className="md:col-span-3 flex justify-end">
-                  <button
-                    type="submit"
-                    className="bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-lg disabled:opacity-60"
-                    disabled={products.length === 0}
-                  >
-                    Agregar al pedido
-                  </button>
-                </div>
-              </form>
+              {orderError && (
+                <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                  {orderError}
+                </p>
+              )}
+              {orderMsg && (
+                <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                  {orderMsg}
+                </p>
+              )}
 
-              <div className="border border-slate-200 rounded-xl px-4 py-3 space-y-2">
-                <h4 className="font-semibold text-slate-700 text-sm">
-                  Resumen de tu pedido
-                </h4>
-                {orderItems.length === 0 ? (
-                  <p className="text-xs text-slate-500">
-                    Aún no agregas productos. Selecciona uno del catálogo para comenzar.
-                  </p>
-                ) : (
-                  <ul className="space-y-2 text-sm text-slate-600">
-                    {orderItems.map((item) => (
-                      <li
-                        key={item.productId}
-                        className="flex items-center justify-between gap-3"
-                      >
-                        <span>
-                          {item.quantity} × {item.name}
-                        </span>
-                        <div className="flex items-center gap-3">
-                          <span className="font-medium text-slate-800">
-                            {currencyFormatter.format((Number(item.price) || 0) * item.quantity)}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => removeOrderItem(item.productId)}
-                            className="text-xs text-red-600 hover:underline"
+              <div className="grid gap-6 md:grid-cols-[1.2fr,1fr] items-start">
+                {/* Lista de items */}
+                <div className="space-y-3">
+                  {orderItems.length === 0 ? (
+                    <p className="text-sm text-slate-500">
+                      Aún no has agregado productos. Selecciona alguno en el
+                      catálogo de arriba.
+                    </p>
+                  ) : (
+                    <>
+                      <ul className="space-y-2">
+                        {orderItems.map((item) => (
+                          <li
+                            key={item.productId}
+                            className="flex items-center justify-between gap-3 border border-slate-200 rounded-xl px-3 py-2 bg-slate-50"
                           >
-                            Quitar
-                          </button>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                            <div>
+                              <p className="text-sm font-medium text-slate-800">
+                                {item.name}
+                              </p>
+                              <p className="text-xs text-slate-500">
+                                {item.quantity} x{" "}
+                                {currencyFormatter.format(item.price || 0)}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <p className="text-sm font-semibold text-slate-800">
+                                {currencyFormatter.format(
+                                  (item.price || 0) * item.quantity
+                                )}
+                              </p>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  removeOrderItem(item.productId)
+                                }
+                                className="text-xs text-red-500 hover:text-red-600"
+                              >
+                                Quitar
+                              </button>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
 
-                <div className="flex items-center justify-between text-sm font-semibold text-slate-800">
-                  <span>Total estimado</span>
-                  <span>{currencyFormatter.format(orderTotal)}</span>
-                </div>
-              </div>
-
-              <form onSubmit={submitOrder} className="grid gap-3 md:grid-cols-2 text-sm">
-                <div className="md:col-span-2">
-                  <label className="block text-xs font-medium text-slate-600 mb-1">
-                    Nombre completo
-                  </label>
-                  <input
-                    name="customerName"
-                    value={orderForm.customerName}
-                    onChange={onOrderFormChange}
-                    className="w-full border rounded-lg px-3 py-2"
-                    placeholder="Tu nombre"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">
-                    Correo electrónico
-                  </label>
-                  <input
-                    name="customerEmail"
-                    value={orderForm.customerEmail}
-                    onChange={onOrderFormChange}
-                    className="w-full border rounded-lg px-3 py-2"
-                    placeholder="tucorreo@example.com"
-                    type="email"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">
-                    Teléfono
-                  </label>
-                  <input
-                    name="customerPhone"
-                    value={orderForm.customerPhone}
-                    onChange={onOrderFormChange}
-                    className="w-full border rounded-lg px-3 py-2"
-                    placeholder="+56 9 ..."
-                  />
+                      <div className="flex justify-between items-center pt-2 border-t border-slate-200 mt-2">
+                        <span className="text-sm font-medium text-slate-700">
+                          Total estimado
+                        </span>
+                        <span className="text-lg font-semibold text-emerald-600">
+                          {currencyFormatter.format(orderTotal)}
+                        </span>
+                      </div>
+                    </>
+                  )}
                 </div>
 
-                <div className="md:col-span-2">
-                  <label className="block text-xs font-medium text-slate-600 mb-1">
-                    Dirección o instrucciones de entrega
-                  </label>
-                  <textarea
-                    name="customerAddress"
-                    value={orderForm.customerAddress}
-                    onChange={onOrderFormChange}
-                    rows={3}
-                    className="w-full border rounded-lg px-3 py-2"
-                    placeholder="Ej: Calle Falsa 123, depto 4"
-                  />
-                </div>
+                {/* Form pedido */}
+                <form onSubmit={submitOrder} className="space-y-3 text-sm">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                      Nombre completo
+                    </label>
+                    <input
+                      name="customerName"
+                      value={orderForm.customerName}
+                      onChange={onOrderFormChange}
+                      className="w-full border rounded-lg px-3 py-2"
+                      placeholder="Tu nombre"
+                    />
+                  </div>
 
-                <div className="md:col-span-2">
-                  <label className="block text-xs font-medium text-slate-600 mb-1">
-                    Comentarios adicionales
-                  </label>
-                  <textarea
-                    name="notes"
-                    value={orderForm.notes}
-                    onChange={onOrderFormChange}
-                    rows={3}
-                    className="w-full border rounded-lg px-3 py-2"
-                    placeholder="Cuéntanos si tienes alguna instrucción especial"
-                  />
-                </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                      Correo electrónico
+                    </label>
+                    <input
+                      name="customerEmail"
+                      value={orderForm.customerEmail}
+                      onChange={onOrderFormChange}
+                      className="w-full border rounded-lg px-3 py-2"
+                      placeholder="tucorreo@example.com"
+                      type="email"
+                    />
+                  </div>
 
-                {orderError && (
-                  <p className="md:col-span-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-                    {orderError}
-                  </p>
-                )}
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                      Teléfono
+                    </label>
+                    <input
+                      name="customerPhone"
+                      value={orderForm.customerPhone}
+                      onChange={onOrderFormChange}
+                      className="w-full border rounded-lg px-3 py-2"
+                      placeholder="+56 9 ..."
+                    />
+                  </div>
 
-                {orderMsg && (
-                  <p className="md:col-span-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
-                    {orderMsg}
-                  </p>
-                )}
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                      Dirección (para entrega, si aplica)
+                    </label>
+                    <input
+                      name="customerAddress"
+                      value={orderForm.customerAddress}
+                      onChange={onOrderFormChange}
+                      className="w-full border rounded-lg px-3 py-2"
+                      placeholder="Calle, número, comuna"
+                    />
+                  </div>
 
-                <div className="md:col-span-2 flex justify-end">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                      Comentarios
+                    </label>
+                    <textarea
+                      name="notes"
+                      value={orderForm.notes}
+                      onChange={onOrderFormChange}
+                      rows={3}
+                      className="w-full border rounded-lg px-3 py-2"
+                      placeholder="Detalles de tu pedido, referencias, etc."
+                    />
+                  </div>
+
                   <button
                     type="submit"
-                    disabled={orderSubmitting}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg disabled:opacity-60"
+                    disabled={orderSubmitting || orderItems.length === 0}
+                    className="w-full bg-emerald-500 hover:bg-emerald-600 text-white py-2 rounded-lg text-sm font-medium disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    {orderSubmitting ? "Enviando…" : "Enviar pedido"}
+                    {orderSubmitting ? "Enviando pedido…" : "Enviar pedido"}
                   </button>
-                </div>
-              </form>
-            </section>
-          </>
+                </form>
+              </div>
+            </div>
+          </section>
         )}
 
+        {/* BOTÓN VOLVER */}
         <div className="flex justify-end">
           <button
             onClick={() => navigate("/")}

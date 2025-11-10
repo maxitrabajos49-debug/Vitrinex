@@ -4,6 +4,32 @@ import Product from "../models/product.model.js";
 import Booking from "../models/booking.model.js";
 import Order from "../models/order.model.js";
 
+
+// Lista de productos públicos de una tienda (vista cliente)
+export const listStoreProductsPublic = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Buscamos productos asociados a la tienda.
+    // Probamos tanto "store" como "storeId" por si el modelo usa uno u otro.
+    const products = await Product.find({
+      $or: [{ store: id }, { storeId: id }],
+      isDeleted: { $ne: true },
+    })
+      .sort({ createdAt: 1 })
+      .lean();
+
+    return res.json(products);
+  } catch (err) {
+    console.error("Error al listar productos públicos:", err);
+    return res
+      .status(500)
+      .json({ message: "No se pudo cargar el catálogo de productos." });
+  }
+};
+
+
+
 const DAY_ORDER = [
   "monday",
   "tuesday",
@@ -39,7 +65,9 @@ const normalizeAvailability = (availability = []) => {
     const cleanSlots = Array.from(
       new Set(
         slots
-          .filter((slot) => typeof slot === "string" && SLOT_REGEX.test(slot.trim()))
+          .filter(
+            (slot) => typeof slot === "string" && SLOT_REGEX.test(slot.trim())
+          )
           .map((slot) => slot.trim())
       )
     ).sort();
@@ -73,7 +101,12 @@ const findStoreForOwner = async (storeId, userId) => {
     const legacyOwnerId = store.user?.toString();
 
     if (ownerId !== userId && legacyOwnerId !== userId) {
-      return { error: { status: 403, message: "No tienes permisos sobre esta tienda" } };
+      return {
+        error: {
+          status: 403,
+          message: "No tienes permisos sobre esta tienda",
+        },
+      };
     }
   }
 
@@ -150,6 +183,13 @@ export const saveMyStore = async (req, res) => {
     lat,
     lng,
     direccion,
+    primaryColor,
+    accentColor,
+    heroTitle,
+    heroSubtitle,
+    highlight1,
+    highlight2,
+    priceFrom,
   } = req.body;
 
   if (!name) {
@@ -180,6 +220,13 @@ export const saveMyStore = async (req, res) => {
           isActive: true,
           owner: userId,
           user: userId,
+          primaryColor: primaryColor || "#2563eb",
+          accentColor: accentColor || "#0f172a",
+          heroTitle: heroTitle || "",
+          heroSubtitle: heroSubtitle || "",
+          highlight1: highlight1 || "",
+          highlight2: highlight2 || "",
+          priceFrom: priceFrom || "",
         },
         { new: true }
       );
@@ -204,6 +251,13 @@ export const saveMyStore = async (req, res) => {
       lng,
       direccion,
       isActive: true,
+      primaryColor: primaryColor || "#2563eb",
+      accentColor: accentColor || "#0f172a",
+      heroTitle: heroTitle || "",
+      heroSubtitle: heroSubtitle || "",
+      highlight1: highlight1 || "",
+      highlight2: highlight2 || "",
+      priceFrom: priceFrom || "",
     });
 
     return res.status(201).json(store);
@@ -237,6 +291,13 @@ export const getStoreById = async (req, res) => {
       direccion: store.direccion,
       lat: store.lat,
       lng: store.lng,
+      primaryColor: store.primaryColor || "#2563eb",
+      accentColor: store.accentColor || "#0f172a",
+      heroTitle: store.heroTitle || "",
+      heroSubtitle: store.heroSubtitle || "",
+      highlight1: store.highlight1 || "",
+      highlight2: store.highlight2 || "",
+      priceFrom: store.priceFrom || "",
       ownerName: store.owner?.username || null,
       ownerAvatar: store.owner?.avatarUrl || null,
       ownerEmail: store.owner?.email || null,
@@ -360,15 +421,17 @@ export const createAppointment = async (req, res) => {
       req.body || {};
 
     if (!customerName || !date || !slot) {
-      return res
-        .status(400)
-        .json({ message: "Nombre del cliente, fecha y horario son obligatorios" });
+      return res.status(400).json({
+        message: "Nombre del cliente, fecha y horario son obligatorios",
+      });
     }
 
     const normalizedDate = normalizeDateOnly(date);
 
     if (!normalizedDate) {
-      return res.status(400).json({ message: "La fecha proporcionada no es válida" });
+      return res
+        .status(400)
+        .json({ message: "La fecha proporcionada no es válida" });
     }
 
     if (!SLOT_REGEX.test(slot)) {
@@ -410,15 +473,73 @@ export const createAppointment = async (req, res) => {
       });
     } catch (err) {
       if (err?.code === 11000) {
-        return res
-          .status(409)
-          .json({ message: "Ese horario ya fue reservado. Elige otro." });
+        return res.status(409).json({
+          message: "Ese horario ya fue reservado. Elige otro.",
+        });
       }
       throw err;
     }
   } catch (err) {
     console.error("Error al crear reserva:", err);
     res.status(500).json({ message: "Error al reservar la cita" });
+  }
+};
+
+// 🔹 Actualizar estado de una cita (pendiente / confirmada / cancelada)
+export const updateAppointmentStatus = async (req, res) => {
+  const { id } = req.params; // id de la tienda
+  const { bookingId } = req.params;
+  const userId = req.user.id;
+  const { status } = req.body;
+
+  try {
+    const { store, error } = await findStoreForOwner(id, userId);
+
+    if (error) {
+      return res.status(error.status).json({ message: error.message });
+    }
+
+    if (store.mode !== "bookings") {
+      return res
+        .status(400)
+        .json({ message: "Esta tienda no es de agendamiento" });
+    }
+
+    const allowed = ["pending", "confirmed", "cancelled"];
+    if (!allowed.includes(status)) {
+      return res.status(400).json({
+        message: "Estado inválido. Usa: pending, confirmed o cancelled",
+      });
+    }
+
+    const booking = await Booking.findOne({
+      _id: bookingId,
+      store: store._id,
+    });
+
+    if (!booking) {
+      return res.status(404).json({ message: "Reserva no encontrada" });
+    }
+
+    booking.status = status;
+    await booking.save();
+
+    return res.json({
+      _id: booking._id,
+      customerName: booking.customerName,
+      customerEmail: booking.customerEmail,
+      customerPhone: booking.customerPhone,
+      date: booking.date,
+      slot: booking.slot,
+      status: booking.status,
+      notes: booking.notes,
+      createdAt: booking.createdAt,
+    });
+  } catch (err) {
+    console.error("Error al actualizar estado de reserva:", err);
+    return res
+      .status(500)
+      .json({ message: "Error al actualizar el estado de la reserva" });
   }
 };
 
@@ -434,31 +555,26 @@ const mapProductResponse = (product) => ({
   updatedAt: product.updatedAt,
 });
 
+// Lista de productos visibles para clientes (vista pública)
 export const listStoreProducts = async (req, res) => {
   try {
     const { id } = req.params;
-    const store = await Store.findById(id).lean();
 
-    if (!store) {
-      return res.status(404).json({ message: "Tienda no encontrada" });
-    }
+    const products = await Product.find({ store: id, active: true })
+      // 👇 Ajusta el nombre del campo de imagen según tu modelo:
+      // si en el schema el campo se llama "imageUrl", deja "imageUrl"
+      // si se llama "image", cámbialo por "image"
+      .select("name description price imageUrl");
 
-    if (store.mode !== "products") {
-      return res
-        .status(400)
-        .json({ message: "Esta tienda no vende productos" });
-    }
-
-    const products = await Product.find({ store: store._id, isActive: true })
-      .sort({ createdAt: -1 })
-      .lean();
-
-    res.json(products.map(mapProductResponse));
-  } catch (err) {
-    console.error("Error al listar productos:", err);
-    res.status(500).json({ message: "Error al obtener los productos" });
+    return res.json(products);
+  } catch (error) {
+    console.error("Error al listar productos públicos", error);
+    return res.status(500).json({
+      message: "No se pudo cargar el catálogo de productos",
+    });
   }
 };
+
 
 export const listStoreProductsForOwner = async (req, res) => {
   const { id } = req.params;
@@ -524,14 +640,16 @@ export const createStoreProduct = async (req, res) => {
     const { name, description, price, images, isActive } = req.body || {};
 
     if (!name || typeof price === "undefined") {
-      return res
-        .status(400)
-        .json({ message: "Nombre y precio del producto son obligatorios" });
+      return res.status(400).json({
+        message: "Nombre y precio del producto son obligatorios",
+      });
     }
 
     const numericPrice = Number(price);
     if (Number.isNaN(numericPrice) || numericPrice < 0) {
-      return res.status(400).json({ message: "El precio debe ser un número válido" });
+      return res
+        .status(400)
+        .json({ message: "El precio debe ser un número válido" });
     }
 
     const product = await Product.create({
@@ -725,9 +843,9 @@ export const createStoreOrder = async (req, res) => {
       .filter((item) => item.productId && item.quantity > 0);
 
     if (cleanedItems.length === 0) {
-      return res
-        .status(400)
-        .json({ message: "Los productos seleccionados no son válidos" });
+      return res.status(400).json({
+        message: "Los productos seleccionados no son válidos",
+      });
     }
 
     const productIds = cleanedItems.map((item) => item.productId);
@@ -738,9 +856,9 @@ export const createStoreOrder = async (req, res) => {
     }).lean();
 
     if (products.length !== cleanedItems.length) {
-      return res
-        .status(400)
-        .json({ message: "Uno o más productos ya no están disponibles" });
+      return res.status(400).json({
+        message: "Uno o más productos ya no están disponibles",
+      });
     }
 
     const orderItems = cleanedItems.map((item) => {

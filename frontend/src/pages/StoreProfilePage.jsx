@@ -6,10 +6,12 @@ import {
   getStoreById,
   updateMyStore,
 } from "../api/store";
+
 import BookingAvailabilityManager from "../components/BookingAvailabilityManager";
 import AppointmentsList from "../components/AppointmentsList";
 import ProductManager from "../components/ProductManager";
 import OrdersList from "../components/OrdersList";
+import StoreCalendarManager from "../components/StoreCalendarManager";
 
 export default function StoreProfilePage() {
   const { id } = useParams();
@@ -23,7 +25,16 @@ export default function StoreProfilePage() {
     comuna: "",
     tipoNegocio: "",
     direccion: "",
+    // Personalización visual
+    primaryColor: "#2563eb",
+    accentColor: "#0f172a",
+    heroTitle: "",
+    heroSubtitle: "",
+    highlight1: "",
+    highlight2: "",
+    priceFrom: "",
   });
+
   const [storeData, setStoreData] = useState(null);
 
   const [loading, setLoading] = useState(true);
@@ -44,6 +55,13 @@ export default function StoreProfilePage() {
     comuna: store?.comuna || "",
     tipoNegocio: store?.tipoNegocio || "",
     direccion: store?.direccion || "",
+    primaryColor: store?.primaryColor || "#2563eb",
+    accentColor: store?.accentColor || "#0f172a",
+    heroTitle: store?.heroTitle || "",
+    heroSubtitle: store?.heroSubtitle || "",
+    highlight1: store?.highlight1 || "",
+    highlight2: store?.highlight2 || "",
+    priceFrom: store?.priceFrom || "",
   });
 
   const loadStore = async () => {
@@ -68,6 +86,7 @@ export default function StoreProfilePage() {
     setMsg("");
   };
 
+  // Geocodificación simple con OpenStreetMap
   const getCoordinates = async (address) => {
     try {
       const res = await fetch(
@@ -144,6 +163,25 @@ export default function StoreProfilePage() {
     );
   }
 
+  // Placeholders distintos según modo
+  const isBookingMode = form.mode === "bookings";
+  const heroTitlePlaceholder = isBookingMode
+    ? "Ej: Agenda tu hora en línea en segundos"
+    : "Ej: Encuentra tus productos favoritos aquí";
+  const heroSubtitlePlaceholder = isBookingMode
+    ? "Ej: Servicios para personas, mascotas o empresas, sin complicaciones."
+    : "Ej: Despacho rápido, medios de pago flexibles.";
+  const highlight1Placeholder = isBookingMode
+    ? "Ej: Atención personalizada"
+    : "Ej: Ofertas todas las semanas";
+  const highlight2Placeholder = isBookingMode
+    ? "Ej: Cambios o re-agendamiento flexible"
+    : "Ej: Stock actualizado";
+
+  const priceFromPlaceholder = isBookingMode
+    ? "Ej: Servicios desde $15.000"
+    : "Ej: Productos desde $9.990";
+
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col">
       <MainHeader subtitle="Editar perfil de la tienda" />
@@ -174,20 +212,23 @@ export default function StoreProfilePage() {
           </div>
         </div>
 
-        <section className="bg-white border rounded-2xl p-5 shadow-sm">
+        <section className="bg-white border rounded-2xl p-5 shadow-sm space-y-4">
           {error && (
-            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3">
+            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
               {error}
             </p>
           )}
 
           {msg && (
-            <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2 mb-3">
+            <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
               {msg}
             </p>
           )}
 
-          <form onSubmit={onSubmit} className="grid gap-4 md:grid-cols-2 text-sm">
+          <form
+            onSubmit={onSubmit}
+            className="grid gap-4 md:grid-cols-2 text-sm"
+          >
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">
                 Nombre del negocio
@@ -203,7 +244,7 @@ export default function StoreProfilePage() {
 
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">
-                Tipo de tienda
+                Tipo de operación
               </label>
               <select
                 name="mode"
@@ -211,8 +252,8 @@ export default function StoreProfilePage() {
                 onChange={onChange}
                 className="w-full border rounded-lg px-3 py-2"
               >
-                <option value="products">Productos</option>
-                <option value="bookings">Agendamiento</option>
+                <option value="products">Venta de productos</option>
+                <option value="bookings">Agendamiento de horas</option>
               </select>
             </div>
 
@@ -237,6 +278,7 @@ export default function StoreProfilePage() {
                 value={form.tipoNegocio}
                 onChange={onChange}
                 className="w-full border rounded-lg px-3 py-2"
+                placeholder="Ej: barbería, tienda de ropa, electrónica…"
               />
             </div>
 
@@ -276,14 +318,134 @@ export default function StoreProfilePage() {
                 value={form.direccion}
                 onChange={onChange}
                 className="w-full border rounded-lg px-3 py-2"
-                placeholder="Ej: La Punta 1702, Renca, Región Metropolitana"
+                placeholder="Ej: Manuel Antonio Caro 1766, Renca, Región Metropolitana"
               />
               <p className="text-xs text-slate-500 mt-1">
                 Usamos esta dirección para posicionar tu negocio en el mapa.
               </p>
             </div>
 
-            <div className="md:col-span-2 flex justify-end gap-2">
+            {/* PERSONALIZACIÓN VISUAL */}
+            <div className="md:col-span-2 pt-4 border-t">
+              <h3 className="text-sm font-semibold text-slate-800 mb-2">
+                Personalización visual
+              </h3>
+              <p className="text-xs text-slate-500 mb-3">
+                Haz que la página pública de tu negocio se vea única. Estos
+                cambios afectan tanto la vista de citas como la de productos.
+              </p>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">
+                    Color principal (botones, acentos)
+                  </label>
+                  <div className="flex gap-2 items-center">
+                    <input
+                      type="color"
+                      name="primaryColor"
+                      value={form.primaryColor}
+                      onChange={onChange}
+                      className="h-9 w-9 rounded-md border cursor-pointer"
+                    />
+                    <input
+                      name="primaryColor"
+                      value={form.primaryColor}
+                      onChange={onChange}
+                      className="flex-1 border rounded-lg px-3 py-2 text-xs font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">
+                    Color de fondo / encabezados
+                  </label>
+                  <div className="flex gap-2 items-center">
+                    <input
+                      type="color"
+                      name="accentColor"
+                      value={form.accentColor}
+                      onChange={onChange}
+                      className="h-9 w-9 rounded-md border cursor-pointer"
+                    />
+                    <input
+                      name="accentColor"
+                      value={form.accentColor}
+                      onChange={onChange}
+                      className="flex-1 border rounded-lg px-3 py-2 text-xs font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">
+                    Título principal (hero)
+                  </label>
+                  <input
+                    name="heroTitle"
+                    value={form.heroTitle}
+                    onChange={onChange}
+                    className="w-full border rounded-lg px-3 py-2"
+                    placeholder={heroTitlePlaceholder}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">
+                    Subtítulo
+                  </label>
+                  <input
+                    name="heroSubtitle"
+                    value={form.heroSubtitle}
+                    onChange={onChange}
+                    className="w-full border rounded-lg px-3 py-2"
+                    placeholder={heroSubtitlePlaceholder}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">
+                    Punto destacado 1
+                  </label>
+                  <input
+                    name="highlight1"
+                    value={form.highlight1}
+                    onChange={onChange}
+                    className="w-full border rounded-lg px-3 py-2"
+                    placeholder={highlight1Placeholder}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">
+                    Punto destacado 2
+                  </label>
+                  <input
+                    name="highlight2"
+                    value={form.highlight2}
+                    onChange={onChange}
+                    className="w-full border rounded-lg px-3 py-2"
+                    placeholder={highlight2Placeholder}
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-medium text-slate-600 mb-1">
+                    Referencia de precios (opcional)
+                  </label>
+                  <input
+                    name="priceFrom"
+                    value={form.priceFrom}
+                    onChange={onChange}
+                    className="w-full border rounded-lg px-3 py-2"
+                    placeholder={priceFromPlaceholder}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="md:col-span-2 flex justify-end gap-2 pt-2">
               <button
                 type="button"
                 className="border border-slate-300 text-slate-700 px-4 py-2 rounded-lg hover:bg-slate-50"
@@ -309,9 +471,12 @@ export default function StoreProfilePage() {
           </div>
         )}
 
+        {/* HERRAMIENTAS SEGÚN MODO */}
+
         {!modePendingChange && storeData?.mode === "bookings" && (
           <>
             <BookingAvailabilityManager storeId={id} />
+            <StoreCalendarManager storeId={id} />
             <AppointmentsList storeId={id} />
           </>
         )}

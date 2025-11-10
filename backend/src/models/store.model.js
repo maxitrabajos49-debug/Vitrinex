@@ -3,13 +3,13 @@ import mongoose from "mongoose";
 
 const storeSchema = new mongoose.Schema(
   {
-    // NUEVO: compatibilidad con documentos antiguos
+    // Compatibilidad con documentos antiguos
     user: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
     },
 
-    // Propietario "oficial" actual
+    // Propietario oficial actual
     owner: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -47,7 +47,7 @@ const storeSchema = new mongoose.Schema(
       trim: true,
     },
 
-    // NUEVO: dirección textual
+    // Dirección textual
     direccion: {
       type: String,
       trim: true,
@@ -61,12 +61,13 @@ const storeSchema = new mongoose.Schema(
       type: Number,
     },
 
-    // NUEVO: para poder desactivar locales sin borrarlos
+    // Para poder desactivar locales sin borrarlos
     isActive: {
       type: Boolean,
       default: true,
     },
 
+    // Disponibilidad de agendamiento (por día + slots)
     bookingAvailability: {
       type: [
         {
@@ -91,13 +92,43 @@ const storeSchema = new mongoose.Schema(
       ],
       default: [],
     },
+
+    // 🎨 Personalización visual y textos destacados
+    primaryColor: {
+      type: String,
+      default: "#2563eb", // azul por defecto
+    },
+    accentColor: {
+      type: String,
+      default: "#0f172a", // casi negro
+    },
+    heroTitle: {
+      type: String,
+      default: "",
+    },
+    heroSubtitle: {
+      type: String,
+      default: "",
+    },
+    highlight1: {
+      type: String,
+      default: "",
+    },
+    highlight2: {
+      type: String,
+      default: "",
+    },
+    priceFrom: {
+      type: String,
+      default: "",
+    },
   },
   {
     timestamps: true,
   }
 );
 
-// Indexes to speed up owner-based lookups without enforcing uniqueness
+// Indexes para acelerar búsquedas por owner / user
 storeSchema.index({ owner: 1 });
 storeSchema.index({ user: 1 });
 

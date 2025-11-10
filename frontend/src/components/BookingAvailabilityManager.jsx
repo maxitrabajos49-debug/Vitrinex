@@ -33,6 +33,32 @@ const sortAvailability = (availability) => {
   );
 };
 
+// Para construir una vista de la próxima semana
+const WEEK_DOW = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+
+const buildWeekPreview = (availability) => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const result = [];
+
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(today);
+    d.setDate(today.getDate() + i);
+
+    const dow = WEEK_DOW[d.getDay()];
+    const entry = availability.find((item) => item.dayOfWeek === dow);
+
+    result.push({
+      date: d,
+      dayOfWeek: dow,
+      slots: entry?.slots || [],
+    });
+  }
+
+  return result;
+};
+
 export default function BookingAvailabilityManager({ storeId }) {
   const [availability, setAvailability] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -48,7 +74,9 @@ export default function BookingAvailabilityManager({ storeId }) {
         setLoading(true);
         setError("");
         const { data } = await getStoreAvailability(storeId);
-        setAvailability(Array.isArray(data?.availability) ? data.availability : []);
+        setAvailability(
+          Array.isArray(data?.availability) ? data.availability : []
+        );
       } catch (err) {
         console.error("Error al cargar disponibilidad", err?.response || err);
         setError(
@@ -69,6 +97,11 @@ export default function BookingAvailabilityManager({ storeId }) {
     [availability]
   );
 
+  const weekPreview = useMemo(
+    () => buildWeekPreview(availability),
+    [availability]
+  );
+
   const addSlot = () => {
     setError("");
     setMessage("");
@@ -81,7 +114,9 @@ export default function BookingAvailabilityManager({ storeId }) {
 
     setAvailability((prev) => {
       const copy = [...prev];
-      const entryIndex = copy.findIndex((item) => item.dayOfWeek === selectedDay);
+      const entryIndex = copy.findIndex(
+        (item) => item.dayOfWeek === selectedDay
+      );
 
       if (entryIndex === -1) {
         return [...copy, { dayOfWeek: selectedDay, slots: [normalized] }];
@@ -112,7 +147,9 @@ export default function BookingAvailabilityManager({ storeId }) {
   };
 
   const removeDay = (day) => {
-    setAvailability((prev) => prev.filter((entry) => entry.dayOfWeek !== day));
+    setAvailability((prev) =>
+      prev.filter((entry) => entry.dayOfWeek !== day)
+    );
   };
 
   const saveAvailability = async () => {
@@ -120,14 +157,24 @@ export default function BookingAvailabilityManager({ storeId }) {
       setSaving(true);
       setError("");
       setMessage("");
+
+      console.log("➡️ Guardando disponibilidad para storeId:", storeId);
+      console.log("➡️ Payload availability:", availability);
+
       const { data } = await updateStoreAvailability(storeId, availability);
+
+      console.log("✅ Respuesta del backend al guardar disponibilidad:", data);
+
       setAvailability(
         Array.isArray(data?.availability) ? data.availability : []
       );
       setMessage("Disponibilidad guardada correctamente");
     } catch (err) {
-      console.error("Error al guardar disponibilidad", err?.response || err);
-      setError(err?.response?.data?.message || "No se pudo guardar la disponibilidad");
+      console.error("❌ Error al guardar disponibilidad", err?.response || err);
+      setError(
+        err?.response?.data?.message ||
+          "No se pudo guardar la disponibilidad"
+      );
     } finally {
       setSaving(false);
     }
@@ -137,7 +184,7 @@ export default function BookingAvailabilityManager({ storeId }) {
     return (
       <section className="bg-white border rounded-2xl p-5 shadow-sm">
         <h3 className="text-lg font-semibold text-slate-800 mb-2">
-          Horarios disponibles
+          Horarios disponibles 
         </h3>
         <p className="text-sm text-slate-500">Cargando horarios…</p>
       </section>
@@ -177,6 +224,7 @@ export default function BookingAvailabilityManager({ storeId }) {
         </p>
       )}
 
+      {/* Editor de patrones semanales */}
       <div className="flex flex-col md:flex-row gap-3 md:items-end">
         <div className="flex-1">
           <label className="block text-xs font-medium text-slate-600 mb-1">
@@ -216,6 +264,7 @@ export default function BookingAvailabilityManager({ storeId }) {
         </button>
       </div>
 
+      {/* Lista de patrones por día de la semana */}
       {sortedAvailability.length === 0 ? (
         <p className="text-sm text-slate-500">
           Aún no tienes horarios configurados. Agrega tus primeros horarios para
@@ -265,6 +314,53 @@ export default function BookingAvailabilityManager({ storeId }) {
           })}
         </div>
       )}
+
+      {/* Vista de la próxima semana */}
+      <div className="mt-4 border-t border-slate-200 pt-4">
+        <h4 className="text-sm font-semibold text-slate-700 mb-2">
+          Vista de la próxima semana
+        </h4>
+        <p className="text-xs text-slate-500 mb-3">
+          Así verán tus clientes los horarios disponibles durante los próximos 7 días,
+          según lo que configuraste arriba.
+        </p>
+        <div className="grid gap-3 md:grid-cols-2">
+          {weekPreview.map((dayInfo) => {
+            const label = dayInfo.date.toLocaleDateString("es-CL", {
+              weekday: "long",
+              day: "2-digit",
+              month: "2-digit",
+            });
+
+            return (
+              <div
+                key={dayInfo.date.toISOString()}
+                className="border border-slate-200 rounded-xl px-4 py-3"
+              >
+                <h5 className="text-xs font-semibold text-slate-700 mb-2">
+                  {label.charAt(0).toUpperCase() + label.slice(1)}
+                </h5>
+                {dayInfo.slots.length === 0 ? (
+                  <p className="text-xs text-slate-500">
+                    Sin horarios disponibles este día.
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {dayInfo.slots.map((slot) => (
+                      <span
+                        key={slot}
+                        className="bg-slate-100 text-slate-700 text-xs px-3 py-1 rounded-full"
+                      >
+                        {slot}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </section>
   );
 }
