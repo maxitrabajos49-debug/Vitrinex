@@ -5,7 +5,7 @@ import {
   getStoreById,
   getStoreAvailability,
   createAppointment,
-  listStoreProducts,
+  listStoreProductsPublic,
   createStoreOrder,
 } from "../api/store";
 import MainHeader from "../components/MainHeader";
@@ -168,7 +168,7 @@ export default function StorePublicPage() {
     try {
       setProductsLoading(true);
       setProductsError("");
-      const { data } = await listStoreProducts(id);
+      const { data } = await listStoreProductsPublic(id);
       setProducts(Array.isArray(data) ? data : []);
       setSelectedProductId((Array.isArray(data) && data[0]?._id) || "");
     } catch (err) {

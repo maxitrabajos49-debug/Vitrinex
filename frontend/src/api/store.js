@@ -12,6 +12,8 @@ export const listPublicStores = (filters = {}) =>
   client.get("/stores", { params: filters });
 
 export const listMyStores = () => client.get("/stores/my");
+export const getMyStores = () => listMyStores();
+export const getMyStore = () => listMyStores();
 
 export const saveMyStore = (data) => client.post("/stores/my", data);
 
@@ -33,7 +35,10 @@ export const listStoreAppointments = (id) =>
 export const createAppointment = (id, data) =>
   client.post(`/stores/${id}/appointments`, data);
 
-export const listStoreProducts = (id) => client.get(`/stores/${id}/products`);
+export const listStoreProductsPublic = (id) =>
+  client.get(`/stores/${id}/public-products`);
+
+export const listStoreProducts = (id) => listStoreProductsPublic(id);
 
 export const listStoreProductsForOwner = (id) =>
   client.get(`/stores/${id}/products/manage`);

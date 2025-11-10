@@ -442,6 +442,18 @@ export const createAppointment = async (req, res) => {
 };
 
 // 🔹 Productos para tiendas de ventas
+const withActiveProducts = (query = {}) => {
+  const activeClause = {
+    $or: [{ isActive: true }, { isActive: { $exists: false } }],
+  };
+
+  if (!query || Object.keys(query).length === 0) {
+    return activeClause;
+  }
+
+  return { $and: [query, activeClause] };
+};
+
 const mapProductResponse = (product) => ({
   _id: product._id,
   name: product.name,
@@ -453,7 +465,7 @@ const mapProductResponse = (product) => ({
   updatedAt: product.updatedAt,
 });
 
-export const listStoreProducts = async (req, res) => {
+export const listStoreProductsPublic = async (req, res) => {
   try {
     const { id } = req.params;
     const store = await Store.findById(id).lean();
@@ -512,6 +524,8 @@ export const listStoreProductsForOwner = async (req, res) => {
     res.status(500).json({ message: "Error al obtener los productos" });
   }
 };
+
+export const listStoreProducts = listStoreProductsPublic;
 
 const parseImages = (images) => {
   if (!images) return [];

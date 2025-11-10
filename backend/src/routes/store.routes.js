@@ -9,7 +9,7 @@ import {
   updateStoreAvailability,
   listStoreAppointments,
   createAppointment,
-  listStoreProducts,
+  listStoreProductsPublic,
   listStoreProductsForOwner,
   createStoreProduct,
   updateStoreProduct,
@@ -31,7 +31,8 @@ router.get("/:id/appointments", authRequired, listStoreAppointments);
 router.post("/:id/appointments", createAppointment);
 
 router.get("/:id/products/manage", authRequired, listStoreProductsForOwner);
-router.get("/:id/products", listStoreProducts);
+router.get("/:id/public-products", listStoreProductsPublic);
+router.get("/:id/products", listStoreProductsPublic); // compat
 router.post("/:id/products", authRequired, createStoreProduct);
 router.put("/:id/products/:productId", authRequired, updateStoreProduct);
 router.delete("/:id/products/:productId", authRequired, deleteStoreProduct);
