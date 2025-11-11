@@ -25,7 +25,6 @@ export default function StoreProfilePage() {
     comuna: "",
     tipoNegocio: "",
     direccion: "",
-    // Personalización visual
     primaryColor: "#2563eb",
     accentColor: "#0f172a",
     heroTitle: "",
@@ -86,7 +85,6 @@ export default function StoreProfilePage() {
     setMsg("");
   };
 
-  // Geocodificación simple con OpenStreetMap
   const getCoordinates = async (address) => {
     try {
       const res = await fetch(
@@ -114,34 +112,23 @@ export default function StoreProfilePage() {
 
     try {
       if (!form.direccion || !form.direccion.trim()) {
-        setError(
-          "Ingresa una dirección exacta para poder ubicar tu negocio en el mapa."
-        );
+        setError("Ingresa una dirección exacta para poder ubicar tu negocio en el mapa.");
         setSaving(false);
         return;
       }
 
       const coords = await getCoordinates(form.direccion.trim());
-
       if (!coords) {
-        setError(
-          "No pudimos encontrar la ubicación de esa dirección. Intenta ser más específico (incluye comuna y región)."
-        );
+        setError("No pudimos encontrar la ubicación de esa dirección. Intenta ser más específico.");
         setSaving(false);
         return;
       }
 
-      const payload = {
-        ...form,
-        lat: coords.lat,
-        lng: coords.lng,
-      };
-
+      const payload = { ...form, lat: coords.lat, lng: coords.lng };
       const { data: updatedStore } = await updateMyStore(id, payload);
 
       setStoreData(updatedStore);
       setForm(mapStoreToForm(updatedStore));
-
       setMsg("Tienda actualizada correctamente.");
     } catch (err) {
       console.error(err);
@@ -151,8 +138,7 @@ export default function StoreProfilePage() {
     }
   };
 
-  const modePendingChange =
-    storeData && form?.mode && storeData.mode !== form.mode;
+  const modePendingChange = storeData && form?.mode && storeData.mode !== form.mode;
 
   if (loading) {
     return (
@@ -163,7 +149,6 @@ export default function StoreProfilePage() {
     );
   }
 
-  // Placeholders distintos según modo
   const isBookingMode = form.mode === "bookings";
   const heroTitlePlaceholder = isBookingMode
     ? "Ej: Agenda tu hora en línea en segundos"
@@ -177,13 +162,17 @@ export default function StoreProfilePage() {
   const highlight2Placeholder = isBookingMode
     ? "Ej: Cambios o re-agendamiento flexible"
     : "Ej: Stock actualizado";
-
   const priceFromPlaceholder = isBookingMode
     ? "Ej: Servicios desde $15.000"
     : "Ej: Productos desde $9.990";
 
   return (
-    <div className="min-h-screen bg-slate-100 flex flex-col">
+       <div
+  className="min-h-screen flex flex-col"
+  style={{
+    background: "linear-gradient(to bottom, #e1c0f6 0%, #ffffff 80%)",
+  }}
+>
       <MainHeader subtitle="Editar perfil de la tienda" />
 
       <main className="flex-1 max-w-4xl mx-auto px-4 py-6 space-y-6">
@@ -225,10 +214,7 @@ export default function StoreProfilePage() {
             </p>
           )}
 
-          <form
-            onSubmit={onSubmit}
-            className="grid gap-4 md:grid-cols-2 text-sm"
-          >
+          <form onSubmit={onSubmit} className="grid gap-4 md:grid-cols-2 text-sm">
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">
                 Nombre del negocio
@@ -325,121 +311,36 @@ export default function StoreProfilePage() {
               </p>
             </div>
 
-            {/* PERSONALIZACIÓN VISUAL */}
+            {/* Personalización visual */}
             <div className="md:col-span-2 pt-4 border-t">
               <h3 className="text-sm font-semibold text-slate-800 mb-2">
                 Personalización visual
               </h3>
-              <p className="text-xs text-slate-500 mb-3">
-                Haz que la página pública de tu negocio se vea única. Estos
-                cambios afectan tanto la vista de citas como la de productos.
-              </p>
 
               <div className="grid gap-3 md:grid-cols-2">
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">
-                    Color principal (botones, acentos)
-                  </label>
-                  <div className="flex gap-2 items-center">
-                    <input
-                      type="color"
-                      name="primaryColor"
-                      value={form.primaryColor}
-                      onChange={onChange}
-                      className="h-9 w-9 rounded-md border cursor-pointer"
-                    />
-                    <input
-                      name="primaryColor"
-                      value={form.primaryColor}
-                      onChange={onChange}
-                      className="flex-1 border rounded-lg px-3 py-2 text-xs font-mono"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">
-                    Color de fondo / encabezados
-                  </label>
-                  <div className="flex gap-2 items-center">
-                    <input
-                      type="color"
-                      name="accentColor"
-                      value={form.accentColor}
-                      onChange={onChange}
-                      className="h-9 w-9 rounded-md border cursor-pointer"
-                    />
-                    <input
-                      name="accentColor"
-                      value={form.accentColor}
-                      onChange={onChange}
-                      className="flex-1 border rounded-lg px-3 py-2 text-xs font-mono"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">
-                    Título principal (hero)
+                    Color principal
                   </label>
                   <input
-                    name="heroTitle"
-                    value={form.heroTitle}
+                    type="color"
+                    name="primaryColor"
+                    value={form.primaryColor}
                     onChange={onChange}
-                    className="w-full border rounded-lg px-3 py-2"
-                    placeholder={heroTitlePlaceholder}
+                    className="w-16 h-9 border rounded-lg"
                   />
                 </div>
 
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">
-                    Subtítulo
+                    Color secundario
                   </label>
                   <input
-                    name="heroSubtitle"
-                    value={form.heroSubtitle}
+                    type="color"
+                    name="accentColor"
+                    value={form.accentColor}
                     onChange={onChange}
-                    className="w-full border rounded-lg px-3 py-2"
-                    placeholder={heroSubtitlePlaceholder}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">
-                    Punto destacado 1
-                  </label>
-                  <input
-                    name="highlight1"
-                    value={form.highlight1}
-                    onChange={onChange}
-                    className="w-full border rounded-lg px-3 py-2"
-                    placeholder={highlight1Placeholder}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">
-                    Punto destacado 2
-                  </label>
-                  <input
-                    name="highlight2"
-                    value={form.highlight2}
-                    onChange={onChange}
-                    className="w-full border rounded-lg px-3 py-2"
-                    placeholder={highlight2Placeholder}
-                  />
-                </div>
-
-                <div className="md:col-span-2">
-                  <label className="block text-xs font-medium text-slate-600 mb-1">
-                    Referencia de precios (opcional)
-                  </label>
-                  <input
-                    name="priceFrom"
-                    value={form.priceFrom}
-                    onChange={onChange}
-                    className="w-full border rounded-lg px-3 py-2"
-                    placeholder={priceFromPlaceholder}
+                    className="w-16 h-9 border rounded-lg"
                   />
                 </div>
               </div>
@@ -470,8 +371,6 @@ export default function StoreProfilePage() {
             {form.mode === "bookings" ? "agendamiento" : "venta de productos"}".
           </div>
         )}
-
-        {/* HERRAMIENTAS SEGÚN MODO */}
 
         {!modePendingChange && storeData?.mode === "bookings" && (
           <>

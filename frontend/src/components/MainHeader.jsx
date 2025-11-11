@@ -1,98 +1,108 @@
+// src/components/MainHeader.jsx
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
 export default function MainHeader({ subtitle }) {
   const { isAuthenticated, user, logout } = useAuth();
   const [openMenu, setOpenMenu] = useState(false);
-  const navigate = useNavigate();
-
-  const handleLogout = async () => {
-    try {
-      await logout();
-      navigate("/login");
-    } finally {
-      setOpenMenu(false);
-    }
-  };
 
   return (
-    <header className="bg-white border-b shadow-sm sticky top-0 z-50">
-      <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-        {/* LOGO → vuelve al inicio */}
-        <div
-          className="cursor-pointer select-none"
-          onClick={() => navigate("/")}
-        >
-          <h1 className="text-xl font-bold text-slate-800 hover:text-blue-600 transition">
-            Vitrinex
-          </h1>
+    <header
+      className="shadow-lg border-b transition-all duration-300"
+      style={{
+        background: "linear-gradient(90deg, #e1c0f6 0%, #f0e2fb 100%)", // 💜 tono lavanda con degradado suave
+      }}
+    >
+      <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+        {/* Logo */}
+        <div className="flex items-center gap-5">
+          <Link to="/" className="flex items-center">
+            <img
+              src="/logo-vitrinex.png"
+              alt="Vitrinex"
+              className="h-24 w-auto object-contain drop-shadow-lg transition-transform duration-300 hover:scale-105"
+            />
+          </Link>
+
           {subtitle && (
-            <span className="text-sm text-slate-500">{subtitle}</span>
+            <span className="text-base md:text-lg font-semibold text-violet-800 tracking-wide">
+              {subtitle}
+            </span>
           )}
         </div>
 
-        {/* DERECHA: sesión y menú */}
-        <div className="flex items-center gap-3 relative">
-          {!isAuthenticated && (
-            <Link
-              to="/login"
-              className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg px-4 py-2 transition"
-            >
-              Iniciar sesión
-            </Link>
-          )}
-
-          {isAuthenticated && (
+        {/* Panel derecho */}
+        <div className="flex items-center gap-3">
+          {!isAuthenticated ? (
+            <div className="flex items-center gap-2 text-sm">
+              <Link
+                to="/login"
+                className="px-4 py-2 rounded-lg bg-white/90 text-violet-700 font-medium hover:bg-white transition"
+              >
+                Iniciar sesión
+              </Link>
+              <Link
+                to="/register"
+                className="px-4 py-2 rounded-lg bg-violet-700 text-white font-medium hover:bg-violet-800 transition"
+              >
+                Crear cuenta
+              </Link>
+            </div>
+          ) : (
             <>
-              {/* Avatar + nombre */}
-              <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className="flex items-center gap-2 text-sm px-3 py-1.5 rounded-full bg-white/90 hover:bg-white transition"
+              >
                 {user?.avatarUrl ? (
                   <img
                     src={user.avatarUrl}
-                    alt="Avatar"
-                    className="h-8 w-8 rounded-full object-cover border"
+                    alt={user.username}
+                    className="h-9 w-9 rounded-full object-cover"
                   />
                 ) : (
-                  <div className="h-8 w-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-600 text-sm font-semibold">
+                  <span className="h-9 w-9 rounded-full bg-slate-300 flex items-center justify-center text-xs font-semibold text-slate-700">
                     {user?.username?.[0]?.toUpperCase() || "U"}
-                  </div>
+                  </span>
                 )}
-                <span className="text-sm font-medium text-slate-700">
-                  {user?.username}
-                </span>
-              </div>
+                <span className="h-2 w-2 rounded-full bg-green-500" />
+                <span className="text-violet-800 font-medium">{user?.username}</span>
+              </button>
 
-              {/* Botón Ajustes + menú */}
+              {/* Menú desplegable */}
               <div className="relative">
                 <button
                   type="button"
                   onClick={() => setOpenMenu((prev) => !prev)}
-                  className="border border-slate-300 text-slate-700 text-xs md:text-sm rounded-lg px-3 py-2 hover:bg-slate-50 flex items-center gap-1"
+                  className="border border-violet-300 text-violet-800 rounded-lg px-3 py-2 bg-white/50 hover:bg-white/70 flex items-center gap-1 text-sm"
                 >
-                  <span>Ajustes</span>
-                  <span className="text-xs">▾</span>
+                  Ajustes
+                  <span className="text-[10px]">▼</span>
                 </button>
 
                 {openMenu && (
-                  <div className="absolute right-0 mt-2 w-44 bg-white border border-slate-200 rounded-lg shadow-lg text-sm z-20">
+                  <div className="absolute right-0 mt-2 w-52 bg-white border border-violet-200 rounded-lg shadow-lg text-sm z-20">
                     <Link
                       to="/perfil"
                       onClick={() => setOpenMenu(false)}
-                      className="block px-4 py-2 hover:bg-slate-50 border-b"
+                      className="block w-full text-left px-3 py-2 hover:bg-violet-50 border-b"
                     >
                       Editar perfil
                     </Link>
                     <Link
                       to="/onboarding"
                       onClick={() => setOpenMenu(false)}
-                      className="block px-4 py-2 hover:bg-slate-50 border-b"
+                      className="block w-full text-left px-3 py-2 hover:bg-violet-50"
                     >
-                      Ver / editar mis tiendas
+                      Mis tiendas
                     </Link>
                     <button
-                      onClick={handleLogout}
-                      className="w-full text-left px-4 py-2 hover:bg-slate-50 text-red-600"
+                      onClick={() => {
+                        setOpenMenu(false);
+                        logout();
+                      }}
+                      className="w-full text-left px-3 py-2 hover:bg-red-50 text-red-600 border-t"
                     >
                       Cerrar sesión
                     </button>

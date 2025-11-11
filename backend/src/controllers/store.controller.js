@@ -4,14 +4,11 @@ import Product from "../models/product.model.js";
 import Booking from "../models/booking.model.js";
 import Order from "../models/order.model.js";
 
-
 // Lista de productos públicos de una tienda (vista cliente)
 export const listStoreProductsPublic = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Buscamos productos asociados a la tienda.
-    // Probamos tanto "store" como "storeId" por si el modelo usa uno u otro.
     const products = await Product.find({
       $or: [{ store: id }, { storeId: id }],
       isDeleted: { $ne: true },
@@ -27,8 +24,6 @@ export const listStoreProductsPublic = async (req, res) => {
       .json({ message: "No se pudo cargar el catálogo de productos." });
   }
 };
-
-
 
 const DAY_ORDER = [
   "monday",
@@ -267,6 +262,33 @@ export const saveMyStore = async (req, res) => {
   }
 };
 
+// 🔹 Eliminar una tienda del usuario (y sus datos relacionados)
+export const deleteMyStore = async (req, res) => {
+  const userId = req.user.id;
+  const { id } = req.params;
+
+  try {
+    const { store, error } = await findStoreForOwner(id, userId);
+
+    if (error) {
+      return res.status(error.status).json({ message: error.message });
+    }
+
+    // Borramos datos relacionados para no dejar basura
+    await Product.deleteMany({ store: store._id });
+    await Booking.deleteMany({ store: store._id });
+    await Order.deleteMany({ store: store._id });
+    await Store.deleteOne({ _id: store._id });
+
+    return res.json({ success: true, message: "Tienda eliminada correctamente" });
+  } catch (err) {
+    console.error("Error al eliminar tienda:", err);
+    return res
+      .status(500)
+      .json({ message: "Error al eliminar la tienda" });
+  }
+};
+
 // 🔹 Obtener una tienda por ID (perfil público / edición)
 export const getStoreById = async (req, res) => {
   try {
@@ -485,10 +507,8 @@ export const createAppointment = async (req, res) => {
   }
 };
 
-// 🔹 Actualizar estado de una cita (pendiente / confirmada / cancelada)
 export const updateAppointmentStatus = async (req, res) => {
-  const { id } = req.params; // id de la tienda
-  const { bookingId } = req.params;
+  const { id, bookingId } = req.params;
   const userId = req.user.id;
   const { status } = req.body;
 
@@ -543,7 +563,8 @@ export const updateAppointmentStatus = async (req, res) => {
   }
 };
 
-// 🔹 Productos para tiendas de ventas
+// 🔹 Productos
+
 const mapProductResponse = (product) => ({
   _id: product._id,
   name: product.name,
@@ -560,11 +581,9 @@ export const listStoreProducts = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const products = await Product.find({ store: id, active: true })
-      // 👇 Ajusta el nombre del campo de imagen según tu modelo:
-      // si en el schema el campo se llama "imageUrl", deja "imageUrl"
-      // si se llama "image", cámbialo por "image"
-      .select("name description price imageUrl");
+    const products = await Product.find({ store: id, active: true }).select(
+      "name description price imageUrl"
+    );
 
     return res.json(products);
   } catch (error) {
@@ -574,7 +593,6 @@ export const listStoreProducts = async (req, res) => {
     });
   }
 };
-
 
 export const listStoreProductsForOwner = async (req, res) => {
   const { id } = req.params;

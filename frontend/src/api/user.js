@@ -11,6 +11,18 @@ const client = axios.create({
 // Obtener perfil
 export const getProfile = () => client.get("/auth/profile");
 
-// Actualizar perfil
+// Actualizar perfil (username, email, bio, avatarUrl si quieres seguir usando URL)
 export const updateProfile = (payload) =>
   client.put("/auth/profile", payload);
+
+// 🔹 NUEVO: subir avatar (file)
+export const uploadAvatar = (file) => {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  return client.post("/upload/avatar", formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  });
+};
