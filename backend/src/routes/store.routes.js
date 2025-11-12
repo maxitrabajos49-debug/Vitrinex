@@ -8,6 +8,7 @@ import {
   saveMyStore,
   deleteMyStore,
   getStoreById,
+  updateMyStore, // 👈 NUEVO: update parcial por ID
 
   // productos
   listStoreProductsPublic,
@@ -33,7 +34,7 @@ const router = Router();
 /**
  * 🔹 Tiendas públicas
  *  - GET /api/stores/public       → listado para el mapa / exploración
- *  - GET /api/stores/:id          → detalle público de tienda
+ *  - GET /api/stores/:id          → detalle público de tienda (al final)
  *
  *  👀 IMPORTANTE:
  *  La ruta "/public" va ANTES que "/:id" para que "public" no se trate como un id.
@@ -45,7 +46,7 @@ router.get("/public", listPublicStores);
  *  - GET    /api/stores/my        → listar mis tiendas
  *  - POST   /api/stores/my        → crear / actualizar tienda (usa body._id)
  *  - PUT    /api/stores/my        → idem (por compatibilidad con el front)
- *  - DELETE /api/stores/my/:id    → marcar tienda como eliminada
+ *  - DELETE /api/stores/my/:id    → eliminar tienda del usuario
  */
 router.get("/my", authRequired, getMyStore);
 router.post("/my", authRequired, saveMyStore);
@@ -75,11 +76,11 @@ router.patch(
 
 /**
  * 🔹 Productos
- *  - GET    /api/stores/:id/public-products      → catálogo público
- *  - GET    /api/stores/:id/products            → productos del dueño
- *  - POST   /api/stores/:id/products            → crear producto
- *  - PUT    /api/stores/:id/products/:productId → actualizar producto
- *  - DELETE /api/stores/:id/products/:productId → eliminar producto
+ *  - GET    /api/stores/:id/public-products      → catálogo público (compat)
+ *  - GET    /api/stores/:id/products             → productos del dueño
+ *  - POST   /api/stores/:id/products             → crear producto
+ *  - PUT    /api/stores/:id/products/:productId  → actualizar producto
+ *  - DELETE /api/stores/:id/products/:productId  → eliminar producto
  */
 router.get("/:id/public-products", listStoreProductsPublic);
 router.get("/:id/products", authRequired, listStoreProductsForOwner);
@@ -96,9 +97,13 @@ router.get("/:id/orders", authRequired, listStoreOrders);
 router.post("/:id/orders", createStoreOrder);
 
 /**
- * 🔹 Detalle público (esta va al final para no pisar las anteriores)
- *  - GET /api/stores/:id
+ * 🔹 Detalle y actualización por ID
+ *  - PUT /api/stores/:id → actualizar campos permitidos (incluye bg*)
+ *  - GET /api/stores/:id → detalle público de la tienda
+ *
+ *  Se dejan al final para no pisar rutas más específicas como /products, /orders, etc.
  */
+router.put("/:id", authRequired, updateMyStore);
 router.get("/:id", getStoreById);
 
 export default router;
