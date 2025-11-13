@@ -1,10 +1,11 @@
+// frontend/src/pages/CustomerProfilePage.jsx
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import MainHeader from "../components/MainHeader";
 import { getProfile, updateProfile } from "../api/user";
 import { listMyStores } from "../api/store";
 
-// mismo helper de StoreProfilePage
+// mismo helper de StoreProfilePage para el PREVIEW
 const buildBg = (f) => {
   if (f.bgMode === "solid") return { backgroundColor: f.bgColorTop };
   if (f.bgMode === "image" && f.bgImageUrl) {
@@ -119,11 +120,17 @@ export default function CustomerProfilePage() {
     }
   };
 
-  // 🎨 Estilo basado en la configuración del usuario
+  // 🎨 Estilo para el PREVIEW, NO para todo el fondo
   const previewStyle = useMemo(
     () => buildBg(form),
     [form.bgMode, form.bgColorTop, form.bgColorBottom, form.bgImageUrl]
   );
+
+  // 🎨 Estilo oficial Vitrinex para la página
+  const pageBackgroundStyle = {
+    background:
+      "radial-gradient(circle at top, #f4e6ff 0%, #f6edff 30%, #ffffff 70%)",
+  };
 
   const userId = userData?._id || userData?.id;
   const publicUrl = userId
@@ -147,21 +154,20 @@ export default function CustomerProfilePage() {
   return (
     <div
       className="min-h-screen flex flex-col"
-      // ⬅️ AQUÍ el cambio: usamos previewStyle en vez de un gradient fijo
-      style={previewStyle}
+      style={pageBackgroundStyle} // 🔹 Fondo fijo Vitrinex
     >
       <MainHeader subtitle="Editar perfil de usuario" />
 
-      <main className="flex-1 max-w-5xl mx-auto px-4 py-6">
+      <main className="flex-1 max-w-5xl mx-auto px-4 py-8">
         <div className="grid gap-6 md:grid-cols-[260px,minmax(0,1.8fr)] items-start">
-          {/* Sidebar (igual estructura que tienda) */}
-          <aside className="bg-white border rounded-2xl shadow-sm p-4 space-y-4">
+          {/* Sidebar */}
+          <aside className="bg-white/95 border border-violet-100 rounded-2xl shadow-md p-4 space-y-4">
             <div className="flex flex-col items-center text-center space-y-3">
               {avatarSrc ? (
                 <img
                   src={avatarSrc}
                   alt={form.username || "Usuario"}
-                  className="w-20 h-20 rounded-full object-cover border"
+                  className="w-20 h-20 rounded-full object-cover border border-slate-200 shadow-sm"
                 />
               ) : (
                 <div className="w-20 h-20 rounded-full bg-slate-200 flex items-center justify-center text-slate-600 text-lg font-semibold">
@@ -200,7 +206,9 @@ export default function CustomerProfilePage() {
                       await navigator.clipboard.writeText(publicUrl);
                       setMsg("Enlace público copiado.");
                     } catch {
-                      setMsg("Copia el enlace desde la barra del navegador.");
+                      setMsg(
+                        "Si no se copió, copia el enlace desde la barra del navegador."
+                      );
                     }
                   }}
                   className="w-full text-[11px] text-blue-600 hover:underline"
@@ -237,7 +245,7 @@ export default function CustomerProfilePage() {
           {/* Contenido principal */}
           <section className="space-y-4">
             {activeTab === "perfil" && (
-              <section className="bg-white border rounded-2xl p-5 shadow-sm space-y-4">
+              <section className="bg-white/95 border border-violet-100 rounded-2xl p-5 shadow-md space-y-4">
                 <div className="flex items-center justify-between gap-2">
                   <div>
                     <h2 className="text-lg font-semibold text-slate-800">
@@ -248,7 +256,7 @@ export default function CustomerProfilePage() {
                     </p>
                   </div>
 
-                  {/* Preview mini (igual patrón que tienda) */}
+                  {/* Preview mini con los colores del usuario */}
                   <div className="hidden md:block">
                     <div
                       className="w-[300px] rounded-xl border shadow-sm p-3"
@@ -410,7 +418,7 @@ export default function CustomerProfilePage() {
                     />
                   </div>
 
-                  {/* Personalización visual */}
+                  {/* Personalización visual (solo afecta el perfil público / preview) */}
                   <div className="md:col-span-2 pt-4 border-t">
                     <h3 className="text-sm font-semibold text-slate-800 mb-2">
                       Personalización visual del perfil
@@ -581,8 +589,8 @@ export default function CustomerProfilePage() {
           </section>
         </div>
 
-        {/* Mis tiendas relacionadas (con imagen + dirección) */}
-        <section className="mt-10 bg-white rounded-2xl p-6 shadow-lg border">
+        {/* Mis tiendas relacionadas (se mantiene look Vitrinex, tarjetas blancas) */}
+        <section className="mt-10 bg-white/95 rounded-2xl p-6 shadow-md border border-violet-100">
           <h3 className="text-lg font-semibold mb-4 text-slate-800">
             Mis Tiendas Relacionadas
           </h3>
@@ -591,7 +599,7 @@ export default function CustomerProfilePage() {
               No tienes tiendas registradas aún.
             </p>
           ) : (
-            <ul className="divide-y">
+            <ul className="divide-y divide-slate-100">
               {stores.map((store) => {
                 const logo =
                   store.logoUrl ||
@@ -600,7 +608,7 @@ export default function CustomerProfilePage() {
                 return (
                   <li
                     key={store._id}
-                    className="py-2 flex items-center gap-3"
+                    className="py-3 flex items-center gap-3"
                   >
                     <img
                       src={logo}
@@ -612,7 +620,9 @@ export default function CustomerProfilePage() {
                         {store.name}
                       </p>
                       <p className="text-xs text-slate-500">
-                        {store.category || store.tipoNegocio || "Sin categoría"}
+                        {store.category ||
+                          store.tipoNegocio ||
+                          "Sin categoría"}
                       </p>
                       {direccion && (
                         <p className="text-[11px] text-slate-500 truncate">

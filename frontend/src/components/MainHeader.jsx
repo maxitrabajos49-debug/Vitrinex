@@ -3,30 +3,67 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
-export default function MainHeader({ subtitle }) {
+/**
+ * Props:
+ *  - subtitle: texto a la derecha del logo
+ *  - variant: "vitrinex" (por defecto) | "store"
+ *  - headerStyle: estilos extra para el fondo (se usan en variant="store")
+ *  - logoSrc: logo opcional (para tiendas). Si no se pasa, usa el logo de Vitrinex.
+ */
+export default function MainHeader({
+  subtitle,
+  variant = "vitrinex",
+  headerStyle,
+  logoSrc,
+}) {
   const { isAuthenticated, user, logout } = useAuth();
   const [openMenu, setOpenMenu] = useState(false);
+
+  const isStore = variant === "store";
+
+  // Fondo por defecto de Vitrinex
+  const vitrInexStyle = {
+    background: "linear-gradient(90deg, #f3e8ff 0%, #e9d5ff 40%, #ddd6fe 100%)",
+  };
+
+  // Fondo por defecto para tiendas (si no se pasa headerStyle)
+  const defaultStoreStyle = {
+    backgroundImage:
+      "linear-gradient(90deg, #0f172a 0%, #1d4ed8 50%, #0f172a 100%)",
+  };
+
+  const finalStyle = isStore
+    ? { ...(defaultStoreStyle || {}), ...(headerStyle || {}) }
+    : vitrInexStyle;
+
+  const finalLogoSrc = logoSrc || "/logo-vitrinex.png";
+
+  const logoClassName = isStore
+    ? "h-14 w-14 rounded-xl object-cover bg-white shadow-md border border-slate-200"
+    : "h-24 w-auto object-contain drop-shadow-lg";
 
   return (
     <header
       className="shadow-lg border-b transition-all duration-300"
-      style={{
-        background: "linear-gradient(90deg, #e1c0f6 0%, #f0e2fb 100%)", // 💜 tono lavanda con degradado suave
-      }}
+      style={finalStyle}
     >
       <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-        {/* Logo */}
+        {/* Logo + subtítulo */}
         <div className="flex items-center gap-5">
-          <Link to="/" className="flex items-center">
+          <Link to={isStore ? "/" : "/"} className="flex items-center">
             <img
-              src="/logo-vitrinex.png"
-              alt="Vitrinex"
-              className="h-24 w-auto object-contain drop-shadow-lg transition-transform duration-300 hover:scale-105"
+              src={finalLogoSrc}
+              alt={isStore ? "Logo del negocio" : "Vitrinex"}
+              className={logoClassName}
             />
           </Link>
 
           {subtitle && (
-            <span className="text-base md:text-lg font-semibold text-violet-800 tracking-wide">
+            <span
+              className={`text-base md:text-lg font-semibold ${
+                isStore ? "text-white" : "text-violet-800"
+              } tracking-wide`}
+            >
               {subtitle}
             </span>
           )}
@@ -67,7 +104,9 @@ export default function MainHeader({ subtitle }) {
                   </span>
                 )}
                 <span className="h-2 w-2 rounded-full bg-green-500" />
-                <span className="text-violet-800 font-medium">{user?.username}</span>
+                <span className="text-slate-800 font-medium">
+                  {user?.username}
+                </span>
               </button>
 
               {/* Menú desplegable */}
@@ -75,7 +114,7 @@ export default function MainHeader({ subtitle }) {
                 <button
                   type="button"
                   onClick={() => setOpenMenu((prev) => !prev)}
-                  className="border border-violet-300 text-violet-800 rounded-lg px-3 py-2 bg-white/50 hover:bg-white/70 flex items-center gap-1 text-sm"
+                  className="border border-violet-300 text-slate-800 rounded-lg px-3 py-2 bg-white/70 hover:bg-white flex items-center gap-1 text-sm"
                 >
                   Ajustes
                   <span className="text-[10px]">▼</span>
