@@ -97,6 +97,7 @@ const mapProductResponse = (product) => ({
   description: product.description,
   price: product.price,
   images: product.images || [],
+  stock: product.stock,
   isActive: product.isActive,
   createdAt: product.createdAt,
   updatedAt: product.updatedAt,
@@ -635,7 +636,8 @@ export const createStoreProduct = async (req, res) => {
     if (store.mode !== "products")
       return res.status(400).json({ message: "Esta tienda no vende productos" });
 
-    const { name, description, price, images, isActive } = req.body || {};
+    const { name, description, price, images, isActive, stock } = req.body || {};
+
     if (!name || typeof price === "undefined") {
       return res.status(400).json({ message: "Nombre y precio del producto son obligatorios" });
     }
@@ -652,6 +654,7 @@ export const createStoreProduct = async (req, res) => {
       price: numericPrice,
       images: parseImages(images),
       isActive: typeof isActive === "boolean" ? isActive : true,
+      stock: typeof stock === "number" ? stock : 0,
     });
 
     res.status(201).json(mapProductResponse(product));
@@ -675,6 +678,7 @@ export const updateStoreProduct = async (req, res) => {
     const { name, description, price, images, isActive } = req.body || {};
 
     const update = {};
+    
     if (typeof name !== "undefined") update.name = name;
     if (typeof description !== "undefined") update.description = description;
     if (typeof price !== "undefined") {
@@ -686,6 +690,14 @@ export const updateStoreProduct = async (req, res) => {
     }
     if (typeof images !== "undefined") update.images = parseImages(images);
     if (typeof isActive !== "undefined") update.isActive = Boolean(isActive);
+    if (typeof stock !== "undefined") {
+  const numericStock = Number(stock);
+  if (Number.isNaN(numericStock) || numericStock < 0) {
+    return res.status(400).json({ message: "El stock debe ser válido" });
+  }
+  update.stock = numericStock;
+}
+
 
     const product = await Product.findOneAndUpdate(
       { _id: productId, store: store._id },

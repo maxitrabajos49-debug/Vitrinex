@@ -1,3 +1,5 @@
+
+
 // src/pages/StoreProfilePage.jsx
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
@@ -10,11 +12,10 @@ import ProductManager from "../components/ProductManager";
 import OrdersList from "../components/OrdersList";
 import StoreCalendarManager from "../components/StoreCalendarManager";
 
-// helpers para preview / fondos
+/* ========= Helpers =========== */
 const buildBg = (f) => {
-  if (f.bgMode === "solid") {
-    return { backgroundColor: f.bgColorTop };
-  }
+  if (f.bgMode === "solid") return { backgroundColor: f.bgColorTop };
+
   if (f.bgMode === "image" && f.bgImageUrl) {
     return {
       backgroundImage: `url(${f.bgImageUrl})`,
@@ -24,25 +25,30 @@ const buildBg = (f) => {
       backgroundColor: f.bgColorTop,
     };
   }
+
   return {
-    background: `linear-gradient(to bottom, ${f.bgColorTop} 0%, ${f.bgColorBottom} 100%)`,
+    background: `linear-gradient(to bottom, ${f.bgColorTop}, ${f.bgColorBottom})`,
   };
 };
 
-// 🔹 Degradado para la barra superior (misma idea que en StorePublicPage)
 const buildStoreHeaderStyle = (storeLike) => {
   const primary = storeLike?.primaryColor || "#2563eb";
   const accent = storeLike?.accentColor || "#0f172a";
 
   return {
-    backgroundImage: `linear-gradient(90deg, ${primary} 0%, ${accent} 50%, ${primary} 100%)`,
+    backgroundImage: `linear-gradient(90deg, ${primary}, ${accent}, ${primary})`,
   };
 };
+
+/* ─────────────────────────────────────────────
+   COMPONENTE PRINCIPAL
+   ───────────────────────────────────────────── */
 
 export default function StoreProfilePage() {
   const { id } = useParams();
   const navigate = useNavigate();
 
+  // ========= Estados principales ===========
   const [form, setForm] = useState({
     name: "",
     mode: "products",
@@ -58,7 +64,6 @@ export default function StoreProfilePage() {
     highlight1: "",
     highlight2: "",
     priceFrom: "",
-    // fondo
     bgMode: "gradient",
     bgColorTop: "#e8d7ff",
     bgColorBottom: "#ffffff",
@@ -73,6 +78,11 @@ export default function StoreProfilePage() {
   const [msg, setMsg] = useState("");
   const [activeTab, setActiveTab] = useState("perfil");
 
+  // pestañas internas
+  const [productsPanel, setProductsPanel] = useState("catalog");
+  const [bookingsPanel, setBookingsPanel] = useState("availability");
+
+  // ========= Cargar tienda ===========
   useEffect(() => {
     loadStore();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -93,7 +103,6 @@ export default function StoreProfilePage() {
     highlight1: s?.highlight1 || "",
     highlight2: s?.highlight2 || "",
     priceFrom: s?.priceFrom || "",
-    // fondo
     bgMode: s?.bgMode || "gradient",
     bgColorTop: s?.bgColorTop || "#e8d7ff",
     bgColorBottom: s?.bgColorBottom || "#ffffff",
@@ -104,7 +113,6 @@ export default function StoreProfilePage() {
   const loadStore = async () => {
     try {
       setLoading(true);
-      setError("");
       const { data } = await getStoreById(id);
       setStoreData(data);
       setForm(mapStoreToForm(data));
@@ -116,9 +124,9 @@ export default function StoreProfilePage() {
     }
   };
 
+  // ========= Handlers ===========
   const onChange = (e) => {
-    const { name, value } = e.target;
-    setForm((p) => ({ ...p, [name]: value }));
+    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
     setError("");
     setMsg("");
   };
@@ -131,11 +139,8 @@ export default function StoreProfilePage() {
         )}`
       );
       const data = await res.json();
-      if (data.length > 0) {
-        const { lat, lon } = data[0];
-        return { lat: parseFloat(lat), lng: parseFloat(lon) };
-      }
-      return null;
+      if (!data.length) return null;
+      return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
     } catch (err) {
       console.error("Error al obtener coordenadas:", err);
       return null;
@@ -149,89 +154,77 @@ export default function StoreProfilePage() {
     setSaving(true);
 
     try {
-      if (!form.direccion || !form.direccion.trim()) {
-        setError(
-          "Ingresa una dirección exacta para posicionar tu negocio en el mapa."
-        );
+      if (!form.direccion.trim()) {
+        setError("Ingresa una dirección exacta.");
         setSaving(false);
         return;
       }
 
       const coords = await getCoordinates(form.direccion.trim());
       if (!coords) {
-        setError(
-          "No pudimos encontrar esa dirección. Intenta ser más específico."
-        );
+        setError("No pudimos encontrar esa dirección.");
         setSaving(false);
         return;
       }
 
       const payload = { ...form, lat: coords.lat, lng: coords.lng };
-      const { data: updatedStore } = await updateMyStore(id, payload);
+      const { data } = await updateMyStore(id, payload);
 
-      setStoreData(updatedStore);
-      setForm(mapStoreToForm(updatedStore));
+      setStoreData(data);
+      setForm(mapStoreToForm(data));
       setMsg("Tienda actualizada correctamente.");
     } catch (err) {
       console.error(err);
-      setError("Error al guardar los cambios de la tienda.");
+      setError("Error al guardar la tienda.");
     } finally {
       setSaving(false);
     }
   };
 
+  // ========= Valores derivados ===========
   const modePendingChange =
-    storeData && form?.mode && storeData.mode !== form.mode;
+    storeData && form.mode && storeData.mode !== form.mode;
 
-  const isBookingMode = form.mode === "bookings";
-  const heroTitlePlaceholder = isBookingMode
-    ? "Ej: Agenda tu hora en línea en segundos"
-    : "Ej: Encuentra tus productos favoritos aquí";
-  const heroSubtitlePlaceholder = isBookingMode
-    ? "Ej: Servicios para personas, mascotas o empresas."
-    : "Ej: Despacho rápido, medios de pago flexibles.";
-  const highlight1Placeholder = isBookingMode
-    ? "Ej: Atención personalizada"
-    : "Ej: Ofertas todas las semanas";
-  const highlight2Placeholder = isBookingMode
-    ? "Ej: Cambios o re-agendamiento flexible"
-    : "Ej: Stock actualizado";
-  const priceFromPlaceholder = isBookingMode
-    ? "Ej: Servicios desde $15.000"
-    : "Ej: Productos desde $9.990";
-
-  const toolsTabLabel =
-    (storeData?.mode || form.mode) === "bookings"
-      ? "Agendamiento"
-      : "Productos / pedidos";
   const publicUrl = `${window.location.origin}/tienda/${id}`;
 
-  // 🔹 Fondo que se usa en la tarjeta de preview
   const previewStyle = useMemo(
     () => buildBg(form),
     [form.bgMode, form.bgColorTop, form.bgColorBottom, form.bgImageUrl]
   );
 
-  // 🔹 Fondo que se usa para TODA la página de edición (mismo que la tienda)
   const pageBackgroundStyle = previewStyle;
-
-  // 🔹 Estilo del header, usando los colores de la tienda (igual lógica que vista pública)
   const headerStyle = useMemo(
     () => buildStoreHeaderStyle(form),
     [form.primaryColor, form.accentColor]
   );
 
+  const isProductsToolsView =
+    activeTab === "tools" && (storeData?.mode || form.mode) === "products";
+
+  const isBookingsToolsView =
+    activeTab === "tools" && (storeData?.mode || form.mode) === "bookings";
+
+  const gridColsClass =
+    isProductsToolsView || isBookingsToolsView
+      ? "grid gap-8 md:grid-cols-[260px,200px,1fr] items-start justify-center"
+      : "grid gap-8 md:grid-cols-[260px,1fr] items-start justify-center";
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-100">
         <MainHeader subtitle="Cargando tienda..." />
-        <p className="p-6 text-sm text-slate-500">Cargando información…</p>
+        <p className="p-6 text-sm text-slate-500">Cargando…</p>
       </div>
     );
   }
 
+  /* ─────────────────────────────────────────────
+     RENDER
+     ───────────────────────────────────────────── */
+
   return (
     <div className="min-h-screen flex flex-col" style={pageBackgroundStyle}>
+      {/* HEADER */}
       <MainHeader
         subtitle={`Negocio: ${form.name || "Tu tienda"}`}
         variant="store"
@@ -239,10 +232,14 @@ export default function StoreProfilePage() {
         logoSrc={form.logoUrl}
       />
 
-      <main className="flex-1 max-w-5xl mx-auto px-4 py-6">
-        <div className="grid gap-6 md:grid-cols-[260px,minmax(0,1.8fr)] items-start">
-          {/* Sidebar */}
+      {/* CONTENIDO PRINCIPAL */}
+      <main className="flex-1 max-w-7xl mx-auto px-6 py-6">
+        <div className={gridColsClass}>
+          {/* ╔════════════════════════════╗
+             ║   SIDEBAR IZQUIERDO       ║
+             ╚════════════════════════════╝ */}
           <aside className="bg-white/95 backdrop-blur border rounded-2xl shadow-sm p-4 space-y-4">
+            {/* Avatar / Logo */}
             <div className="flex flex-col items-center text-center space-y-3">
               {form.logoUrl ? (
                 <img
@@ -255,6 +252,7 @@ export default function StoreProfilePage() {
                   {form.name?.[0]?.toUpperCase() || "N"}
                 </div>
               )}
+
               <div className="space-y-1">
                 <h2 className="text-base font-semibold text-slate-800">
                   {form.name || "Tu negocio"}
@@ -263,6 +261,7 @@ export default function StoreProfilePage() {
                   {form.comuna || "Comuna no definida"}
                   {form.tipoNegocio ? ` · ${form.tipoNegocio}` : ""}
                 </p>
+
                 {storeData?.mode && (
                   <span className="inline-flex items-center px-2 py-1 rounded-full text-[11px] font-medium bg-slate-100 text-slate-700">
                     {storeData.mode === "bookings"
@@ -273,6 +272,7 @@ export default function StoreProfilePage() {
               </div>
             </div>
 
+            {/* Botones principales */}
             <div className="space-y-2">
               <button
                 onClick={() => navigate(`/tienda/${id}`)}
@@ -280,12 +280,14 @@ export default function StoreProfilePage() {
               >
                 Ver página pública
               </button>
+
               <button
                 onClick={() => navigate("/onboarding")}
                 className="w-full border border-slate-300 text-slate-700 text-xs md:text-sm px-3 py-2 rounded-lg hover:bg-slate-50"
               >
                 Volver a mis tiendas
               </button>
+
               <button
                 type="button"
                 onClick={async () => {
@@ -293,7 +295,7 @@ export default function StoreProfilePage() {
                     await navigator.clipboard.writeText(publicUrl);
                     setMsg("Enlace público copiado.");
                   } catch {
-                    setMsg("Copia el enlace desde la barra del navegador.");
+                    setMsg("No se pudo copiar automáticamente.");
                   }
                 }}
                 className="w-full text-[11px] text-blue-600 hover:underline"
@@ -302,10 +304,12 @@ export default function StoreProfilePage() {
               </button>
             </div>
 
+            {/* Secciones */}
             <div className="pt-3 border-t border-slate-200 space-y-1">
               <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
                 Secciones
               </p>
+
               <button
                 type="button"
                 onClick={() => setActiveTab("perfil")}
@@ -317,6 +321,7 @@ export default function StoreProfilePage() {
               >
                 Perfil
               </button>
+
               <button
                 type="button"
                 onClick={() => setActiveTab("tools")}
@@ -326,13 +331,97 @@ export default function StoreProfilePage() {
                     : "text-slate-700 hover:bg-slate-100"
                 }`}
               >
-                {toolsTabLabel}
+                {(storeData?.mode || form.mode) === "bookings"
+                  ? "Agendamiento"
+                  : "Productos / pedidos"}
               </button>
             </div>
           </aside>
 
-          {/* Contenido */}
+          {/* ╔════════════════════════════╗
+             ║   BARRA CENTRAL (NAV)     ║
+             ╚════════════════════════════╝ */}
+          {(isProductsToolsView || isBookingsToolsView) && (
+            <nav className="hidden md:flex flex-col gap-2 bg-white/90 backdrop-blur border rounded-2xl shadow-sm p-4">
+              {isProductsToolsView && (
+                <>
+                  <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1">
+                    Gestión de productos
+                  </p>
+
+                  <button
+                    onClick={() => setProductsPanel("catalog")}
+                    className={`w-full text-left px-3 py-2 rounded-lg text-sm ${
+                      productsPanel === "catalog"
+                        ? "bg-blue-600 text-white shadow-sm"
+                        : "text-slate-700 hover:bg-slate-100"
+                    }`}
+                  >
+                    Catálogo de productos
+                  </button>
+
+                  <button
+                    onClick={() => setProductsPanel("orders")}
+                    className={`w-full text-left px-3 py-2 rounded-lg text-sm ${
+                      productsPanel === "orders"
+                        ? "bg-blue-600 text-white shadow-sm"
+                        : "text-slate-700 hover:bg-slate-100"
+                    }`}
+                  >
+                    Pedidos
+                  </button>
+                </>
+              )}
+
+              {isBookingsToolsView && (
+                <>
+                  <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1">
+                    Gestión de agendamiento
+                  </p>
+
+                  <button
+                    onClick={() => setBookingsPanel("availability")}
+                    className={`w-full text-left px-3 py-2 rounded-lg text-sm ${
+                      bookingsPanel === "availability"
+                        ? "bg-blue-600 text-white shadow-sm"
+                        : "text-slate-700 hover:bg-slate-100"
+                    }`}
+                  >
+                    Disponibilidad de horarios
+                  </button>
+
+                  <button
+                    onClick={() => setBookingsPanel("calendar")}
+                    className={`w-full text-left px-3 py-2 rounded-lg text-sm ${
+                      bookingsPanel === "calendar"
+                        ? "bg-blue-600 text-white shadow-sm"
+                        : "text-slate-700 hover:bg-slate-100"
+                    }`}
+                  >
+                    Calendario
+                  </button>
+
+                  <button
+                    onClick={() => setBookingsPanel("appointments")}
+                    className={`w-full text-left px-3 py-2 rounded-lg text-sm ${
+                      bookingsPanel === "appointments"
+                        ? "bg-blue-600 text-white shadow-sm"
+                        : "text-slate-700 hover:bg-slate-100"
+                    }`}
+                  >
+                    Reservas / citas
+                  </button>
+                </>
+              )}
+            </nav>
+          )}
+
+
+{/* ╔════════════════════════════╗
+             ║   CONTENIDO PRINCIPAL      ║
+             ╚════════════════════════════╝ */}
           <section className="space-y-4">
+            {/* TAB PERFIL */}
             {activeTab === "perfil" && (
               <section className="bg-white/95 backdrop-blur border rounded-2xl p-5 shadow-sm space-y-4">
                 <div className="flex items-center justify-between gap-2">
@@ -346,7 +435,7 @@ export default function StoreProfilePage() {
                     </p>
                   </div>
 
-                  {/* Preview en miniatura */}
+                  {/* PREVIEW MINI */}
                   <div className="hidden md:block">
                     <div
                       className="w-[300px] rounded-xl border shadow-sm p-3"
@@ -382,6 +471,7 @@ export default function StoreProfilePage() {
                   </div>
                 </div>
 
+                {/* Mensajes */}
                 {error && (
                   <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
                     {error}
@@ -393,10 +483,12 @@ export default function StoreProfilePage() {
                   </p>
                 )}
 
+                {/* FORMULARIO DEL PERFIL */}
                 <form
                   onSubmit={onSubmit}
                   className="grid gap-4 md:grid-cols-2 text-sm"
                 >
+                  {/* Nombre */}
                   <div>
                     <label className="block text-xs font-medium text-slate-600 mb-1">
                       Nombre del negocio
@@ -405,11 +497,12 @@ export default function StoreProfilePage() {
                       name="name"
                       value={form.name}
                       onChange={onChange}
-                      className="w-full border rounded-lg px-3 py-2"
                       required
+                      className="w-full border rounded-lg px-3 py-2"
                     />
                   </div>
 
+                  {/* Tipo operación */}
                   <div>
                     <label className="block text-xs font-medium text-slate-600 mb-1">
                       Tipo de operación
@@ -425,6 +518,7 @@ export default function StoreProfilePage() {
                     </select>
                   </div>
 
+                  {/* Comuna */}
                   <div>
                     <label className="block text-xs font-medium text-slate-600 mb-1">
                       Comuna
@@ -437,6 +531,7 @@ export default function StoreProfilePage() {
                     />
                   </div>
 
+                  {/* Tipo de negocio */}
                   <div>
                     <label className="block text-xs font-medium text-slate-600 mb-1">
                       Tipo de negocio
@@ -445,11 +540,12 @@ export default function StoreProfilePage() {
                       name="tipoNegocio"
                       value={form.tipoNegocio}
                       onChange={onChange}
-                      className="w-full border rounded-lg px-3 py-2"
                       placeholder="Ej: barbería, tienda de ropa…"
+                      className="w-full border rounded-lg px-3 py-2"
                     />
                   </div>
 
+                  {/* Descripción */}
                   <div className="md:col-span-2">
                     <label className="block text-xs font-medium text-slate-600 mb-1">
                       Descripción
@@ -464,19 +560,21 @@ export default function StoreProfilePage() {
                     />
                   </div>
 
+                  {/* Logo */}
                   <div className="md:col-span-2">
                     <label className="block text-xs font-medium text-slate-600 mb-1">
-                      Logo (URL de imagen)
+                      Logo (URL)
                     </label>
                     <input
                       name="logoUrl"
                       value={form.logoUrl}
                       onChange={onChange}
-                      className="w-full border rounded-lg px-3 py-2"
                       placeholder="https://..."
+                      className="w-full border rounded-lg px-3 py-2"
                     />
                   </div>
 
+                  {/* Dirección */}
                   <div className="md:col-span-2">
                     <label className="block text-xs font-medium text-slate-600 mb-1">
                       Dirección exacta
@@ -485,33 +583,34 @@ export default function StoreProfilePage() {
                       name="direccion"
                       value={form.direccion}
                       onChange={onChange}
+                      placeholder="Ej: Manuel Antonio Caro 1766, Renca"
                       className="w-full border rounded-lg px-3 py-2"
-                      placeholder="Ej: Manuel Antonio Caro 1766, Renca, Región Metropolitana"
                     />
                     <p className="text-xs text-slate-500 mt-1">
-                      Usamos esta dirección para posicionar tu negocio en el
+                      Usamos la dirección para posicionar tu negocio en el
                       mapa.
                     </p>
                   </div>
 
-                  {/* Visual */}
+                  {/* Colores y fondo */}
                   <div className="md:col-span-2 pt-4 border-t">
                     <h3 className="text-sm font-semibold text-slate-800 mb-2">
                       Personalización visual
                     </h3>
 
                     <div className="grid gap-3 md:grid-cols-2">
+                      {/* Color primario */}
                       <div>
                         <label className="block text-xs font-medium text-slate-600 mb-1">
-                          Color principal (botones, acentos)
+                          Color principal
                         </label>
-                        <div className="flex gap-2 items-center">
+                        <div className="flex items-center gap-2">
                           <input
                             type="color"
                             name="primaryColor"
                             value={form.primaryColor}
                             onChange={onChange}
-                            className="h-9 w-9 rounded-md border cursor-pointer"
+                            className="h-9 w-9 border rounded-md cursor-pointer"
                           />
                           <input
                             name="primaryColor"
@@ -522,17 +621,18 @@ export default function StoreProfilePage() {
                         </div>
                       </div>
 
+                      {/* Color acento */}
                       <div>
                         <label className="block text-xs font-medium text-slate-600 mb-1">
                           Color de encabezados
                         </label>
-                        <div className="flex gap-2 items-center">
+                        <div className="flex items-center gap-2">
                           <input
                             type="color"
                             name="accentColor"
                             value={form.accentColor}
                             onChange={onChange}
-                            className="h-9 w-9 rounded-md border cursor-pointer"
+                            className="h-9 w-9 border rounded-md cursor-pointer"
                           />
                           <input
                             name="accentColor"
@@ -543,7 +643,7 @@ export default function StoreProfilePage() {
                         </div>
                       </div>
 
-                      {/* Fondo */}
+                      {/* Tipo de fondo */}
                       <div>
                         <label className="block text-xs font-medium text-slate-600 mb-1">
                           Tipo de fondo
@@ -560,6 +660,7 @@ export default function StoreProfilePage() {
                         </select>
                       </div>
 
+                      {/* Patrón */}
                       <div>
                         <label className="block text-xs font-medium text-slate-600 mb-1">
                           Patrón
@@ -577,55 +678,56 @@ export default function StoreProfilePage() {
                         </select>
                       </div>
 
+                      {/* Color superior */}
                       {(form.bgMode === "gradient" ||
                         form.bgMode === "solid") && (
-                        <>
-                          <div>
-                            <label className="block text-xs font-medium text-slate-600 mb-1">
-                              Color superior (degradado) / sólido
-                            </label>
-                            <div className="flex gap-2 items-center">
-                              <input
-                                type="color"
-                                name="bgColorTop"
-                                value={form.bgColorTop}
-                                onChange={onChange}
-                                className="h-9 w-9 rounded-md border cursor-pointer"
-                              />
-                              <input
-                                name="bgColorTop"
-                                value={form.bgColorTop}
-                                onChange={onChange}
-                                className="flex-1 border rounded-lg px-3 py-2 text-xs font-mono"
-                              />
-                            </div>
+                        <div>
+                          <label className="block text-xs font-medium text-slate-600 mb-1">
+                            Color superior / sólido
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="color"
+                              name="bgColorTop"
+                              value={form.bgColorTop}
+                              onChange={onChange}
+                              className="h-9 w-9 border rounded-md cursor-pointer"
+                            />
+                            <input
+                              name="bgColorTop"
+                              value={form.bgColorTop}
+                              onChange={onChange}
+                              className="flex-1 border rounded-lg px-3 py-2 text-xs font-mono"
+                            />
                           </div>
-
-                          {form.bgMode === "gradient" && (
-                            <div>
-                              <label className="block text-xs font-medium text-slate-600 mb-1">
-                                Color inferior (degradado)
-                              </label>
-                              <div className="flex gap-2 items-center">
-                                <input
-                                  type="color"
-                                  name="bgColorBottom"
-                                  value={form.bgColorBottom}
-                                  onChange={onChange}
-                                  className="h-9 w-9 rounded-md border cursor-pointer"
-                                />
-                                <input
-                                  name="bgColorBottom"
-                                  value={form.bgColorBottom}
-                                  onChange={onChange}
-                                  className="flex-1 border rounded-lg px-3 py-2 text-xs font-mono"
-                                />
-                              </div>
-                            </div>
-                          )}
-                        </>
+                        </div>
                       )}
 
+                      {/* Color inferior (solo gradient) */}
+                      {form.bgMode === "gradient" && (
+                        <div>
+                          <label className="block text-xs font-medium text-slate-600 mb-1">
+                            Color inferior (degradado)
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="color"
+                              name="bgColorBottom"
+                              value={form.bgColorBottom}
+                              onChange={onChange}
+                              className="h-9 w-9 border rounded-md cursor-pointer"
+                            />
+                            <input
+                              name="bgColorBottom"
+                              value={form.bgColorBottom}
+                              onChange={onChange}
+                              className="flex-1 border rounded-lg px-3 py-2 text-xs font-mono"
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Imagen de fondo (solo image) */}
                       {form.bgMode === "image" && (
                         <div className="md:col-span-2">
                           <label className="block text-xs font-medium text-slate-600 mb-1">
@@ -635,26 +737,27 @@ export default function StoreProfilePage() {
                             name="bgImageUrl"
                             value={form.bgImageUrl}
                             onChange={onChange}
-                            className="w-full border rounded-lg px-3 py-2"
                             placeholder="https://..."
+                            className="w-full border rounded-lg px-3 py-2"
                           />
                         </div>
                       )}
 
-                      {/* Textos */}
+                      {/* Título principal */}
                       <div>
                         <label className="block text-xs font-medium text-slate-600 mb-1">
-                          Título principal (hero)
+                          Título principal
                         </label>
                         <input
                           name="heroTitle"
                           value={form.heroTitle}
                           onChange={onChange}
+                          placeholder="Ej: Encuentra lo mejor aquí"
                           className="w-full border rounded-lg px-3 py-2"
-                          placeholder={heroTitlePlaceholder}
                         />
                       </div>
 
+                      {/* Subtítulo */}
                       <div>
                         <label className="block text-xs font-medium text-slate-600 mb-1">
                           Subtítulo
@@ -664,10 +767,10 @@ export default function StoreProfilePage() {
                           value={form.heroSubtitle}
                           onChange={onChange}
                           className="w-full border rounded-lg px-3 py-2"
-                          placeholder={heroSubtitlePlaceholder}
                         />
                       </div>
 
+                      {/* Highlights */}
                       <div>
                         <label className="block text-xs font-medium text-slate-600 mb-1">
                           Punto destacado 1
@@ -677,7 +780,6 @@ export default function StoreProfilePage() {
                           value={form.highlight1}
                           onChange={onChange}
                           className="w-full border rounded-lg px-3 py-2"
-                          placeholder={highlight1Placeholder}
                         />
                       </div>
 
@@ -690,33 +792,34 @@ export default function StoreProfilePage() {
                           value={form.highlight2}
                           onChange={onChange}
                           className="w-full border rounded-lg px-3 py-2"
-                          placeholder={highlight2Placeholder}
                         />
                       </div>
 
+                      {/* PriceFrom */}
                       <div className="md:col-span-2">
                         <label className="block text-xs font-medium text-slate-600 mb-1">
-                          Referencia de precios (opcional)
+                          Referencia de precios
                         </label>
                         <input
                           name="priceFrom"
                           value={form.priceFrom}
                           onChange={onChange}
                           className="w-full border rounded-lg px-3 py-2"
-                          placeholder={priceFromPlaceholder}
                         />
                       </div>
                     </div>
                   </div>
 
+                  {/* BOTONES GUARDAR */}
                   <div className="md:col-span-2 flex justify-end gap-2 pt-2">
                     <button
                       type="button"
-                      className="border border-slate-300 text-slate-700 px-4 py-2 rounded-lg hover:bg-slate-50"
                       onClick={() => navigate("/onboarding")}
+                      className="border border-slate-300 text-slate-700 px-4 py-2 rounded-lg hover:bg-slate-50"
                     >
                       Cancelar
                     </button>
+
                     <button
                       type="submit"
                       disabled={saving}
@@ -729,11 +832,12 @@ export default function StoreProfilePage() {
               </section>
             )}
 
+                        {/* TAB HERRAMIENTAS */}
             {activeTab === "tools" && (
               <>
                 {modePendingChange && (
                   <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-700">
-                    Guarda los cambios para activar las herramientas de "
+                    Guarda los cambios para activar herramientas de "
                     {form.mode === "bookings"
                       ? "agendamiento"
                       : "venta de productos"}
@@ -741,18 +845,36 @@ export default function StoreProfilePage() {
                   </div>
                 )}
 
+                {/* Herramientas AGENDAMIENTO */}
                 {!modePendingChange && storeData?.mode === "bookings" && (
                   <>
-                    <BookingAvailabilityManager storeId={id} />
-                    <StoreCalendarManager storeId={id} />
-                    <AppointmentsList storeId={id} />
+                    {bookingsPanel === "availability" && (
+                      <BookingAvailabilityManager storeId={id} />
+                    )}
+
+                    {bookingsPanel === "calendar" && (
+                      <StoreCalendarManager storeId={id} />
+                    )}
+
+                    {bookingsPanel === "appointments" && (
+                      <AppointmentsList storeId={id} />
+                    )}
                   </>
                 )}
 
+                {/* Herramientas PRODUCTOS */}
                 {!modePendingChange && storeData?.mode === "products" && (
                   <>
-                    <ProductManager storeId={id} />
-                    <OrdersList storeId={id} />
+                    {productsPanel === "catalog" && (
+                      <>
+                        <ProductManager storeId={id} panel="catalog" />
+                        <ProductManager storeId={id} panel="add" />
+                      </>
+                    )}
+
+                    {productsPanel === "orders" && (
+                      <OrdersList storeId={id} />
+                    )}
                   </>
                 )}
               </>
