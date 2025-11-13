@@ -8,14 +8,14 @@ const client = axios.create({
   withCredentials: true,
 });
 
-// Obtener perfil
+// Obtener perfil (privado)
 export const getProfile = () => client.get("/auth/profile");
 
-// Actualizar perfil (username, email, bio, avatarUrl si quieres seguir usando URL)
+// Actualizar perfil (privado)
 export const updateProfile = (payload) =>
   client.put("/auth/profile", payload);
 
-// 🔹 NUEVO: subir avatar (file)
+// 🔹 Subir avatar (file) – si lo usas más adelante
 export const uploadAvatar = (file) => {
   const formData = new FormData();
   formData.append("file", file);
@@ -26,3 +26,6 @@ export const uploadAvatar = (file) => {
     },
   });
 };
+
+// 🔹 NUEVO: obtener perfil público de un usuario por ID
+export const getPublicUser = (id) => client.get(`/auth/users/${id}`);
