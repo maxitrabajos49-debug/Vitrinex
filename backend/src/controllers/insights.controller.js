@@ -331,6 +331,8 @@ export const getBookingInsightsForStore = async (req, res) => {
       busySlots,
       services,
       suggestions,
+      suggestionsByCategory,
+      quietSlots,
     });
   } catch (err) {
     console.error("Error en getBookingInsightsForStore:", err);

@@ -145,7 +145,7 @@ export default function SmartInsights({ storeId, mode }) {
           />
           <MetricCard
             label="Tasa de cumplimiento"
-            value={`${summary?.completionRate ?? 0}%`}
+            value={`${normalizedSummary?.completionRate ?? 0}%`}
           />
         </div>
       )}
@@ -184,7 +184,48 @@ function MetricCard({ label, value }) {
 }
 
 function ProductsDetail({ data }) {
-  const { topProducts = [], lowProducts = [], inventoryAlerts = [] } = data;
+  const topProducts = useMemo(() => {
+    if (Array.isArray(data?.topProducts) && data.topProducts.length)
+      return data.topProducts;
+    if (Array.isArray(data?.bestSellers) && data.bestSellers.length)
+      return data.bestSellers.map((item) => ({
+        productId: item.id,
+        name: item.name,
+        totalSold: item.sold ?? 0,
+        totalRevenue: item.revenue ?? 0,
+        price: item.price ?? null,
+        stock: item.stock ?? null,
+      }));
+    return [];
+  }, [data]);
+
+  const lowProducts = useMemo(() => {
+    if (Array.isArray(data?.lowProducts) && data.lowProducts.length)
+      return data.lowProducts;
+    if (Array.isArray(data?.slowMovers) && data.slowMovers.length)
+      return data.slowMovers.map((item) => ({
+        productId: item.id,
+        name: item.name,
+        totalSold: item.sold ?? 0,
+        totalRevenue: item.revenue ?? 0,
+        price: item.price ?? null,
+        stock: item.stock ?? null,
+      }));
+    return [];
+  }, [data]);
+
+  const inventoryAlerts = useMemo(() => {
+    if (Array.isArray(data?.inventoryAlerts) && data.inventoryAlerts.length)
+      return data.inventoryAlerts;
+    if (Array.isArray(data?.lowStock) && data.lowStock.length)
+      return data.lowStock.map((item) => ({
+        level: "warning",
+        message: `Stock crítico en "${item.name}" (quedan ${formatNumber(
+          item.stock ?? 0
+        )} uds.).`,
+      }));
+    return [];
+  }, [data]);
 
   return (
     <div className="grid gap-4 md:grid-cols-3 text-xs">
@@ -271,7 +312,28 @@ function ProductsDetail({ data }) {
 }
 
 function BookingsDetail({ data }) {
-  const { busySlots = [], services = [] } = data;
+  const busySlots = useMemo(() => {
+    if (Array.isArray(data?.busySlots) && data.busySlots.length)
+      return data.busySlots;
+    if (Array.isArray(data?.peakHours) && data.peakHours.length)
+      return data.peakHours;
+    return [];
+  }, [data]);
+
+  const services = useMemo(() => {
+    if (Array.isArray(data?.services) && data.services.length)
+      return data.services.map((service) => ({
+        ...service,
+        total: service.total ?? service.count ?? 0,
+        name: service.name ?? service.service ?? "Servicio",
+      }));
+    if (Array.isArray(data?.popularServices) && data.popularServices.length)
+      return data.popularServices.map((service, idx) => ({
+        name: service.name ?? service.service ?? `Servicio ${idx + 1}`,
+        total: service.total ?? service.count ?? 0,
+      }));
+    return [];
+  }, [data]);
 
   return (
     <div className="grid gap-4 md:grid-cols-2 text-xs">
