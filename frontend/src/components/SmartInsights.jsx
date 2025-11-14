@@ -1,9 +1,23 @@
 // frontend/src/components/SmartInsights.jsx
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   fetchProductInsights,
   fetchBookingInsights,
 } from "../api/insights";
+
+const formatCurrency = (value) => {
+  if (typeof value !== "number" || Number.isNaN(value)) return "$0";
+  return new Intl.NumberFormat("es-CL", {
+    style: "currency",
+    currency: "CLP",
+    maximumFractionDigits: 0,
+  }).format(value);
+};
+
+const formatNumber = (value) => {
+  if (typeof value !== "number" || Number.isNaN(value)) return "0";
+  return value.toLocaleString("es-CL");
+};
 
 export default function SmartInsights({ storeId, mode }) {
   const [loading, setLoading] = useState(true);
@@ -53,7 +67,15 @@ export default function SmartInsights({ storeId, mode }) {
 
   if (!data) return null;
 
-  const { summary, suggestions } = data;
+  const { summary = {}, suggestions = [] } = data;
+
+  const summaryWindowLabel = useMemo(() => {
+    if (!summary?.windowInDays) return null;
+    if (summary.windowInDays === 1) return "Últimas 24h";
+    if (summary.windowInDays === 7) return "Últimos 7 días";
+    if (summary.windowInDays === 30) return "Últimos 30 días";
+    return `Últimos ${summary.windowInDays} días`;
+  }, [summary?.windowInDays]);
 
   return (
     <section className="bg-white/95 border rounded-2xl p-5 shadow-sm space-y-4">
@@ -67,35 +89,42 @@ export default function SmartInsights({ storeId, mode }) {
           </p>
         </div>
 
-        <span className="inline-flex items-center px-2 py-1 text-[11px] rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">
-          {mode === "bookings"
-            ? "Agendamiento y servicios"
-            : "Productos e inventario"}
-        </span>
+        <div className="flex items-center gap-2">
+          {summaryWindowLabel && (
+            <span className="inline-flex items-center px-2 py-1 text-[11px] rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+              {summaryWindowLabel}
+            </span>
+          )}
+          <span className="inline-flex items-center px-2 py-1 text-[11px] rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">
+            {mode === "bookings"
+              ? "Agendamiento y servicios"
+              : "Productos e inventario"}
+          </span>
+        </div>
       </div>
 
       {/* RESUMEN PRINCIPAL */}
       {mode === "products" && (
-        <div className="grid gap-3 md:grid-cols-4 text-xs">
+        <div className="grid gap-3 md:grid-cols-5 text-xs">
           <MetricCard
             label="Pedidos en el período"
-            value={summary?.totalOrders ?? 0}
+            value={formatNumber(summary?.totalOrders ?? 0)}
           />
           <MetricCard
             label="Unidades vendidas"
-            value={summary?.totalItemsSold ?? 0}
+            value={formatNumber(summary?.totalItemsSold ?? 0)}
           />
           <MetricCard
             label="Ingresos estimados"
-            value={
-              summary?.totalRevenue
-                ? `$${summary.totalRevenue.toLocaleString("es-CL")}`
-                : "$0"
-            }
+            value={formatCurrency(summary?.totalRevenue ?? 0)}
+          />
+          <MetricCard
+            label="Ticket promedio"
+            value={formatCurrency(summary?.averageOrderValue ?? 0)}
           />
           <MetricCard
             label="Productos distintos vendidos"
-            value={summary?.uniqueProducts ?? 0}
+            value={formatNumber(summary?.uniqueProducts ?? 0)}
           />
         </div>
       )}
@@ -104,10 +133,16 @@ export default function SmartInsights({ storeId, mode }) {
         <div className="grid gap-3 md:grid-cols-4 text-xs">
           <MetricCard
             label="Citas totales"
-            value={summary?.totalAppointments ?? 0}
+            value={formatNumber(summary?.totalAppointments ?? 0)}
           />
-          <MetricCard label="Confirmadas" value={summary?.confirmed ?? 0} />
-          <MetricCard label="Canceladas" value={summary?.cancelled ?? 0} />
+          <MetricCard
+            label="Confirmadas"
+            value={formatNumber(summary?.confirmed ?? 0)}
+          />
+          <MetricCard
+            label="Canceladas"
+            value={formatNumber(summary?.cancelled ?? 0)}
+          />
           <MetricCard
             label="Tasa de cumplimiento"
             value={`${summary?.completionRate ?? 0}%`}
@@ -168,7 +203,13 @@ function ProductsDetail({ data }) {
               className="flex justify-between items-center border rounded-lg px-2 py-1 bg-slate-50"
             >
               <span className="truncate max-w-[130px]">{p.name}</span>
-              <span className="font-semibold">{p.totalSold} uds.</span>
+              <span className="font-semibold text-right">
+                {formatNumber(p.totalSold)} uds.
+                <br />
+                <span className="text-[11px] text-slate-500">
+                  {formatCurrency(p.totalRevenue ?? 0)}
+                </span>
+              </span>
             </li>
           ))}
         </ul>
@@ -192,7 +233,9 @@ function ProductsDetail({ data }) {
               className="flex justify-between items-center border rounded-lg px-2 py-1 bg-slate-50"
             >
               <span className="truncate max-w-[130px]">{p.name}</span>
-              <span className="font-semibold">{p.totalSold} uds.</span>
+              <span className="font-semibold">
+                {formatNumber(p.totalSold)} uds.
+              </span>
             </li>
           ))}
         </ul>
@@ -260,29 +303,30 @@ function BookingsDetail({ data }) {
         <h3 className="font-semibold text-slate-800 mb-1 text-sm">
           Servicios más solicitados
         </h3>
-        {services.length === 0 && (
+        {services.length === 0 ? (
           <p className="text-slate-500">
             Aún no hay servicios suficientes en el período seleccionado.
           </p>
+        ) : (
+          <ul className="space-y-1">
+            {services.map((s, idx) => (
+              <li
+                key={s.name || s.service || idx}
+                className="flex justify-between items-center border rounded-lg px-2 py-1 bg-slate-50"
+              >
+                <div className="flex flex-col">
+                  <span className="font-medium">{s.name || s.service}</span>
+                  {typeof s.avgRating === "number" && (
+                    <span className="text-[11px] text-slate-500">
+                      Satisfacción promedio: {s.avgRating.toFixed(1)} / 5
+                    </span>
+                  )}
+                </div>
+                <span className="font-semibold">{formatNumber(s.total ?? s.count ?? 0)} citas</span>
+              </li>
+            ))}
+          </ul>
         )}
-        <ul className="space-y-1">
-          {services.map((s) => (
-            <li
-              key={s.name}
-              className="flex justify-between items-center border rounded-lg px-2 py-1 bg-slate-50"
-            >
-              <div className="flex flex-col">
-                <span className="font-medium">{s.name}</span>
-                {s.avgRating && (
-                  <span className="text-[11px] text-slate-500">
-                    Satisfacción promedio: {s.avgRating.toFixed(1)} / 5
-                  </span>
-                )}
-              </div>
-              <span className="font-semibold">{s.total} citas</span>
-            </li>
-          ))}
-        </ul>
       </div>
     </div>
   );
