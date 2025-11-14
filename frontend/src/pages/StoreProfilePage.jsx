@@ -1,3 +1,5 @@
+
+
 // src/pages/StoreProfilePage.jsx
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
@@ -9,7 +11,6 @@ import AppointmentsList from "../components/AppointmentsList";
 import ProductManager from "../components/ProductManager";
 import OrdersList from "../components/OrdersList";
 import StoreCalendarManager from "../components/StoreCalendarManager";
-import SmartInsights from "../components/SmartInsights"; // 👈 IMPORTANTE
 
 /* ========= Helpers =========== */
 const buildBg = (f) => {
@@ -78,8 +79,8 @@ export default function StoreProfilePage() {
   const [activeTab, setActiveTab] = useState("perfil");
 
   // pestañas internas
-  const [productsPanel, setProductsPanel] = useState("catalog"); // catalog | orders | insights
-  const [bookingsPanel, setBookingsPanel] = useState("availability"); // availability | calendar | appointments | insights
+  const [productsPanel, setProductsPanel] = useState("catalog");
+  const [bookingsPanel, setBookingsPanel] = useState("availability");
 
   // ========= Cargar tienda ===========
   useEffect(() => {
@@ -124,7 +125,6 @@ export default function StoreProfilePage() {
   };
 
   // ========= Handlers ===========
-
   const onChange = (e) => {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
     setError("");
@@ -182,7 +182,6 @@ export default function StoreProfilePage() {
   };
 
   // ========= Valores derivados ===========
-
   const modePendingChange =
     storeData && form.mode && storeData.mode !== form.mode;
 
@@ -199,13 +198,11 @@ export default function StoreProfilePage() {
     [form.primaryColor, form.accentColor]
   );
 
-  const effectiveMode = storeData?.mode || form.mode;
-
   const isProductsToolsView =
-    activeTab === "tools" && effectiveMode === "products";
+    activeTab === "tools" && (storeData?.mode || form.mode) === "products";
 
   const isBookingsToolsView =
-    activeTab === "tools" && effectiveMode === "bookings";
+    activeTab === "tools" && (storeData?.mode || form.mode) === "bookings";
 
   const gridColsClass =
     isProductsToolsView || isBookingsToolsView
@@ -334,7 +331,7 @@ export default function StoreProfilePage() {
                     : "text-slate-700 hover:bg-slate-100"
                 }`}
               >
-                {effectiveMode === "bookings"
+                {(storeData?.mode || form.mode) === "bookings"
                   ? "Agendamiento"
                   : "Productos / pedidos"}
               </button>
@@ -372,18 +369,6 @@ export default function StoreProfilePage() {
                     }`}
                   >
                     Pedidos
-                  </button>
-
-                  {/* 👇 NUEVO: botón de análisis inteligente (productos) */}
-                  <button
-                    onClick={() => setProductsPanel("insights")}
-                    className={`w-full text-left px-3 py-2 rounded-lg text-sm ${
-                      productsPanel === "insights"
-                        ? "bg-blue-600 text-white shadow-sm"
-                        : "text-slate-700 hover:bg-slate-100"
-                    }`}
-                  >
-                    Análisis inteligente
                   </button>
                 </>
               )}
@@ -426,24 +411,13 @@ export default function StoreProfilePage() {
                   >
                     Reservas / citas
                   </button>
-
-                  {/* 👇 NUEVO: botón de análisis inteligente (agendamiento) */}
-                  <button
-                    onClick={() => setBookingsPanel("insights")}
-                    className={`w-full text-left px-3 py-2 rounded-lg text-sm ${
-                      bookingsPanel === "insights"
-                        ? "bg-blue-600 text-white shadow-sm"
-                        : "text-slate-700 hover:bg-slate-100"
-                    }`}
-                  >
-                    Análisis inteligente
-                  </button>
                 </>
               )}
             </nav>
           )}
 
-          {/* ╔════════════════════════════╗
+
+{/* ╔════════════════════════════╗
              ║   CONTENIDO PRINCIPAL      ║
              ╚════════════════════════════╝ */}
           <section className="space-y-4">
@@ -858,7 +832,7 @@ export default function StoreProfilePage() {
               </section>
             )}
 
-            {/* TAB HERRAMIENTAS */}
+                        {/* TAB HERRAMIENTAS */}
             {activeTab === "tools" && (
               <>
                 {modePendingChange && (
@@ -872,7 +846,7 @@ export default function StoreProfilePage() {
                 )}
 
                 {/* Herramientas AGENDAMIENTO */}
-                {!modePendingChange && effectiveMode === "bookings" && (
+                {!modePendingChange && storeData?.mode === "bookings" && (
                   <>
                     {bookingsPanel === "availability" && (
                       <BookingAvailabilityManager storeId={id} />
@@ -885,15 +859,11 @@ export default function StoreProfilePage() {
                     {bookingsPanel === "appointments" && (
                       <AppointmentsList storeId={id} />
                     )}
-
-                    {bookingsPanel === "insights" && (
-                      <SmartInsights storeId={id} mode="bookings" />
-                    )}
                   </>
                 )}
 
                 {/* Herramientas PRODUCTOS */}
-                {!modePendingChange && effectiveMode === "products" && (
+                {!modePendingChange && storeData?.mode === "products" && (
                   <>
                     {productsPanel === "catalog" && (
                       <>
@@ -904,10 +874,6 @@ export default function StoreProfilePage() {
 
                     {productsPanel === "orders" && (
                       <OrdersList storeId={id} />
-                    )}
-
-                    {productsPanel === "insights" && (
-                      <SmartInsights storeId={id} mode="products" />
                     )}
                   </>
                 )}
