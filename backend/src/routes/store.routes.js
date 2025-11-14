@@ -1,71 +1,94 @@
-// src/routes/store.routes.js
+// backend/src/routes/store.routes.js
 import { Router } from "express";
+import { authRequired } from "../middlewares/authRequired.js";
 import {
+  // tiendas
   listPublicStores,
   getMyStore,
   saveMyStore,
+  deleteMyStore,
   getStoreById,
-  getStoreAvailability,
-  updateStoreAvailability,
-  listStoreAppointments,
-  createAppointment,
+  updateMyStore,
+
+  // productos
+  listStoreProductsPublic,
   listStoreProductsForOwner,
   createStoreProduct,
   updateStoreProduct,
   deleteStoreProduct,
+
+  // pedidos
   listStoreOrders,
   createStoreOrder,
-  listStoreProductsPublic,
+
+  // agendamiento
+  getStoreAvailability,
+  updateStoreAvailability,
+  listStoreAppointments,
+  createAppointment,
   updateAppointmentStatus,
 } from "../controllers/store.controller.js";
-import { authRequired } from "../middlewares/authRequired.js";
+
+import {
+  getProductInsightsForStore,
+  getBookingInsightsForStore,
+} from "../controllers/insights.controller.js";
 
 const router = Router();
 
-// 🔹 Tiendas públicas
-router.get("/public", listPublicStores);   // <-- usado por frontend (/stores/public)
-router.get("/", listPublicStores);        // opcional, por compatibilidad
+/**
+ * 🔹 Tiendas públicas
+ */
+router.get("/public", listPublicStores);
 
-// 🔹 Mis tiendas
+/**
+ * 🔹 Tiendas del usuario autenticado
+ */
 router.get("/my", authRequired, getMyStore);
 router.post("/my", authRequired, saveMyStore);
+router.put("/my", authRequired, saveMyStore);
+router.delete("/my/:id", authRequired, deleteMyStore);
 
-// 🔹 Disponibilidad / agendamiento
+/**
+ * 🔹 AGENDAMIENTO (tiendas modo "bookings")
+ */
 router.get("/:id/availability", getStoreAvailability);
 router.put("/:id/availability", authRequired, updateStoreAvailability);
 
 router.get("/:id/appointments", authRequired, listStoreAppointments);
 router.post("/:id/appointments", createAppointment);
 
-// 🔹 Productos públicos (vista cliente)
-router.get("/:id/public-products", listStoreProductsPublic);
-
-// 🔹 Cambiar estado de una cita
 router.patch(
   "/:id/appointments/:bookingId/status",
   authRequired,
   updateAppointmentStatus
 );
 
-// 🔹 Productos (dueño)
+/**
+ * 🔹 Productos
+ */
+router.get("/:id/public-products", listStoreProductsPublic);
 router.get("/:id/products", authRequired, listStoreProductsForOwner);
 router.post("/:id/products", authRequired, createStoreProduct);
 router.put("/:id/products/:productId", authRequired, updateStoreProduct);
 router.delete("/:id/products/:productId", authRequired, deleteStoreProduct);
 
-// 🔹 Pedidos
-
-// lo que usa el frontend para listar pedidos del dueño
+/**
+ * 🔹 Pedidos
+ */
 router.get("/:id/orders", authRequired, listStoreOrders);
-
-// si quieres, puedes dejar este alias extra para compatibilidad:
-router.get("/:id/orders/manage", authRequired, listStoreOrders);
-
-// crear pedido (lo usan los clientes desde la página pública)
 router.post("/:id/orders", createStoreOrder);
 
+/**
+ * 🔹 INSIGHTS / ANÁLISIS INTELIGENTE
+ */
+router.get("/:id/insights/products", authRequired, getProductInsightsForStore);
+router.get("/:id/insights/bookings", authRequired, getBookingInsightsForStore);
 
-// 🔹 Obtener tienda por id
+/**
+ * 🔹 Detalle y actualización de tienda por ID
+ */
+router.put("/:id", authRequired, updateMyStore);
 router.get("/:id", getStoreById);
 
 export default router;

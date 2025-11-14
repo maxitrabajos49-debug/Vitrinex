@@ -4,31 +4,7 @@ import Product from "../models/product.model.js";
 import Booking from "../models/booking.model.js";
 import Order from "../models/order.model.js";
 
-
-// Lista de productos públicos de una tienda (vista cliente)
-export const listStoreProductsPublic = async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    // Buscamos productos asociados a la tienda.
-    // Probamos tanto "store" como "storeId" por si el modelo usa uno u otro.
-    const products = await Product.find({
-      $or: [{ store: id }, { storeId: id }],
-      isDeleted: { $ne: true },
-    })
-      .sort({ createdAt: 1 })
-      .lean();
-
-    return res.json(products);
-  } catch (err) {
-    console.error("Error al listar productos públicos:", err);
-    return res
-      .status(500)
-      .json({ message: "No se pudo cargar el catálogo de productos." });
-  }
-};
-
-
+/* =================== Helpers =================== */
 
 const DAY_ORDER = [
   "monday",
@@ -54,7 +30,6 @@ const SLOT_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 const normalizeAvailability = (availability = []) => {
   if (!Array.isArray(availability)) return [];
-
   const map = new Map();
 
   availability.forEach((entry) => {
@@ -65,9 +40,7 @@ const normalizeAvailability = (availability = []) => {
     const cleanSlots = Array.from(
       new Set(
         slots
-          .filter(
-            (slot) => typeof slot === "string" && SLOT_REGEX.test(slot.trim())
-          )
+          .filter((slot) => typeof slot === "string" && SLOT_REGEX.test(slot.trim()))
           .map((slot) => slot.trim())
       )
     ).sort();
@@ -83,41 +56,58 @@ const normalizeAvailability = (availability = []) => {
 
 const normalizeDateOnly = (dateString) => {
   const date = new Date(dateString);
-  if (Number.isNaN(date.getTime())) {
-    return null;
-  }
+  if (Number.isNaN(date.getTime())) return null;
   date.setUTCHours(0, 0, 0, 0);
   return date;
 };
 
 const findStoreForOwner = async (storeId, userId) => {
   const store = await Store.findById(storeId);
-  if (!store) {
-    return { error: { status: 404, message: "Tienda no encontrada" } };
-  }
+  if (!store) return { error: { status: 404, message: "Tienda no encontrada" } };
 
   if (userId) {
     const ownerId = store.owner?.toString();
     const legacyOwnerId = store.user?.toString();
-
     if (ownerId !== userId && legacyOwnerId !== userId) {
-      return {
-        error: {
-          status: 403,
-          message: "No tienes permisos sobre esta tienda",
-        },
-      };
+      return { error: { status: 403, message: "No tienes permisos sobre esta tienda" } };
     }
   }
-
   return { store };
 };
 
-// 🔹 Listar tiendas públicas (home / mapa)
+const parseImages = (images) => {
+  if (!images) return [];
+  if (Array.isArray(images)) {
+    return images
+      .filter((img) => typeof img === "string" && img.trim().length > 0)
+      .map((img) => img.trim());
+  }
+  if (typeof images === "string" && images.trim()) {
+    return images
+      .split(/[\n,]+/)
+      .map((img) => img.trim())
+      .filter((img) => img.length > 0);
+  }
+  return [];
+};
+
+const mapProductResponse = (product) => ({
+  _id: product._id,
+  name: product.name,
+  description: product.description,
+  price: product.price,
+  images: product.images || [],
+  stock: product.stock,
+  isActive: product.isActive,
+  createdAt: product.createdAt,
+  updatedAt: product.updatedAt,
+});
+
+/* =============== PUBLIC STORES (MAP) =============== */
+
 export const listPublicStores = async (req, res) => {
   try {
     const { comuna, tipoNegocio, mode } = req.query;
-
     const query = { isActive: true };
     if (comuna) query.comuna = comuna;
     if (tipoNegocio) query.tipoNegocio = tipoNegocio;
@@ -150,7 +140,8 @@ export const listPublicStores = async (req, res) => {
   }
 };
 
-// 🔹 Obtener tiendas del usuario logueado
+/* =============== MY STORES (OWNER) =============== */
+
 export const getMyStore = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -170,7 +161,7 @@ export const getMyStore = async (req, res) => {
   }
 };
 
-// 🔹 Crear / actualizar tienda del usuario
+// Crear/actualizar (por body con _id). SÍ exportada:
 export const saveMyStore = async (req, res) => {
   const {
     _id,
@@ -190,6 +181,11 @@ export const saveMyStore = async (req, res) => {
     highlight1,
     highlight2,
     priceFrom,
+    bgMode,
+    bgColorTop,
+    bgColorBottom,
+    bgPattern,
+    bgImageUrl,
   } = req.body;
 
   if (!name) {
@@ -201,46 +197,7 @@ export const saveMyStore = async (req, res) => {
   try {
     let store;
 
-    if (_id) {
-      store = await Store.findOneAndUpdate(
-        {
-          _id,
-          $or: [{ owner: userId }, { user: userId }],
-        },
-        {
-          name,
-          mode: mode === "bookings" ? "bookings" : "products",
-          description,
-          logoUrl,
-          comuna,
-          tipoNegocio,
-          lat,
-          lng,
-          direccion,
-          isActive: true,
-          owner: userId,
-          user: userId,
-          primaryColor: primaryColor || "#2563eb",
-          accentColor: accentColor || "#0f172a",
-          heroTitle: heroTitle || "",
-          heroSubtitle: heroSubtitle || "",
-          highlight1: highlight1 || "",
-          highlight2: highlight2 || "",
-          priceFrom: priceFrom || "",
-        },
-        { new: true }
-      );
-
-      if (!store) {
-        return res.status(404).json({ message: "Tienda no encontrada" });
-      }
-
-      return res.status(200).json(store);
-    }
-
-    store = await Store.create({
-      owner: userId,
-      user: userId,
+    const base = {
       name,
       mode: mode === "bookings" ? "bookings" : "products",
       description,
@@ -251,6 +208,8 @@ export const saveMyStore = async (req, res) => {
       lng,
       direccion,
       isActive: true,
+      owner: userId,
+      user: userId,
       primaryColor: primaryColor || "#2563eb",
       accentColor: accentColor || "#0f172a",
       heroTitle: heroTitle || "",
@@ -258,8 +217,24 @@ export const saveMyStore = async (req, res) => {
       highlight1: highlight1 || "",
       highlight2: highlight2 || "",
       priceFrom: priceFrom || "",
-    });
+      bgMode: ["solid", "gradient", "image"].includes(bgMode) ? bgMode : "gradient",
+      bgColorTop: bgColorTop || "#e8d7ff",
+      bgColorBottom: bgColorBottom || "#ffffff",
+      bgPattern: ["none", "dots", "grid", "noise"].includes(bgPattern) ? bgPattern : "none",
+      bgImageUrl: bgImageUrl || "",
+    };
 
+    if (_id) {
+      store = await Store.findOneAndUpdate(
+        { _id, $or: [{ owner: userId }, { user: userId }] },
+        base,
+        { new: true }
+      );
+      if (!store) return res.status(404).json({ message: "Tienda no encontrada" });
+      return res.status(200).json(store);
+    }
+
+    store = await Store.create(base);
     return res.status(201).json(store);
   } catch (err) {
     console.error("Error al guardar tienda:", err);
@@ -267,7 +242,101 @@ export const saveMyStore = async (req, res) => {
   }
 };
 
-// 🔹 Obtener una tienda por ID (perfil público / edición)
+// Update REST por :id. SÍ exportada:
+export const updateMyStore = async (req, res) => {
+  const { id } = req.params;
+  const {
+    name,
+    mode,
+    description,
+    logoUrl,
+    comuna,
+    tipoNegocio,
+    lat,
+    lng,
+    direccion,
+    primaryColor,
+    accentColor,
+    heroTitle,
+    heroSubtitle,
+    highlight1,
+    highlight2,
+    priceFrom,
+    bgMode,
+    bgColorTop,
+    bgColorBottom,
+    bgPattern,
+    bgImageUrl,
+  } = req.body;
+
+  if (!name) return res.status(400).json({ message: "El nombre es obligatorio" });
+
+  const userId = req.user.id;
+
+  try {
+    const baseUpdate = {
+      name,
+      mode: mode === "bookings" ? "bookings" : "products",
+      description,
+      logoUrl,
+      comuna,
+      tipoNegocio,
+      lat,
+      lng,
+      direccion,
+      isActive: true,
+      owner: userId,
+      user: userId,
+      primaryColor: primaryColor || "#2563eb",
+      accentColor: accentColor || "#0f172a",
+      heroTitle: heroTitle || "",
+      heroSubtitle: heroSubtitle || "",
+      highlight1: highlight1 || "",
+      highlight2: highlight2 || "",
+      priceFrom: priceFrom || "",
+      bgMode: ["solid", "gradient", "image"].includes(bgMode) ? bgMode : "gradient",
+      bgColorTop: bgColorTop || "#e8d7ff",
+      bgColorBottom: bgColorBottom || "#ffffff",
+      bgPattern: ["none", "dots", "grid", "noise"].includes(bgPattern) ? bgPattern : "none",
+      bgImageUrl: bgImageUrl || "",
+    };
+
+    const store = await Store.findOneAndUpdate(
+      { _id: id, $or: [{ owner: userId }, { user: userId }] },
+      baseUpdate,
+      { new: true }
+    );
+
+    if (!store) return res.status(404).json({ message: "Tienda no encontrada" });
+    return res.status(200).json(store);
+  } catch (err) {
+    console.error("Error al actualizar tienda:", err);
+    return res.status(500).json({ message: "Error al actualizar la tienda" });
+  }
+};
+
+export const deleteMyStore = async (req, res) => {
+  const userId = req.user.id;
+  const { id } = req.params;
+
+  try {
+    const { store, error } = await findStoreForOwner(id, userId);
+    if (error) return res.status(error.status).json({ message: error.message });
+
+    await Product.deleteMany({ store: store._id });
+    await Booking.deleteMany({ store: store._id });
+    await Order.deleteMany({ store: store._id });
+    await Store.deleteOne({ _id: store._id });
+
+    return res.json({ success: true, message: "Tienda eliminada correctamente" });
+  } catch (err) {
+    console.error("Error al eliminar tienda:", err);
+    return res.status(500).json({ message: "Error al eliminar la tienda" });
+  }
+};
+
+/* =============== PUBLIC / EDIT: GET STORE BY ID =============== */
+
 export const getStoreById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -275,9 +344,7 @@ export const getStoreById = async (req, res) => {
       .populate("owner", "username avatarUrl email")
       .lean();
 
-    if (!store) {
-      return res.status(404).json({ message: "Tienda no encontrada" });
-    }
+    if (!store) return res.status(404).json({ message: "Tienda no encontrada" });
 
     res.json({
       _id: store._id,
@@ -298,6 +365,12 @@ export const getStoreById = async (req, res) => {
       highlight1: store.highlight1 || "",
       highlight2: store.highlight2 || "",
       priceFrom: store.priceFrom || "",
+      // nuevos campos de personalización
+      bgMode: store.bgMode || "gradient",
+      bgColorTop: store.bgColorTop || "#e8d7ff",
+      bgColorBottom: store.bgColorBottom || "#ffffff",
+      bgPattern: store.bgPattern || "none",
+      bgImageUrl: store.bgImageUrl || "",
       ownerName: store.owner?.username || null,
       ownerAvatar: store.owner?.avatarUrl || null,
       ownerEmail: store.owner?.email || null,
@@ -310,21 +383,15 @@ export const getStoreById = async (req, res) => {
   }
 };
 
-// 🔹 Disponibilidad para tiendas de agendamiento
+/* =============== BOOKINGS =============== */
+
 export const getStoreAvailability = async (req, res) => {
   try {
     const { id } = req.params;
     const store = await Store.findById(id).lean();
-
-    if (!store) {
-      return res.status(404).json({ message: "Tienda no encontrada" });
-    }
-
-    if (store.mode !== "bookings") {
-      return res
-        .status(400)
-        .json({ message: "Esta tienda no permite agendar citas" });
-    }
+    if (!store) return res.status(404).json({ message: "Tienda no encontrada" });
+    if (store.mode !== "bookings")
+      return res.status(400).json({ message: "Esta tienda no permite agendar citas" });
 
     res.json({ availability: store.bookingAvailability || [] });
   } catch (err) {
@@ -339,16 +406,10 @@ export const updateStoreAvailability = async (req, res) => {
 
   try {
     const { store, error } = await findStoreForOwner(id, userId);
+    if (error) return res.status(error.status).json({ message: error.message });
 
-    if (error) {
-      return res.status(error.status).json({ message: error.message });
-    }
-
-    if (store.mode !== "bookings") {
-      return res
-        .status(400)
-        .json({ message: "Esta tienda no es de agendamiento" });
-    }
+    if (store.mode !== "bookings")
+      return res.status(400).json({ message: "Esta tienda no es de agendamiento" });
 
     const normalized = normalizeAvailability(req.body?.availability);
     store.bookingAvailability = normalized;
@@ -367,16 +428,10 @@ export const listStoreAppointments = async (req, res) => {
 
   try {
     const { store, error } = await findStoreForOwner(id, userId);
+    if (error) return res.status(error.status).json({ message: error.message });
 
-    if (error) {
-      return res.status(error.status).json({ message: error.message });
-    }
-
-    if (store.mode !== "bookings") {
-      return res
-        .status(400)
-        .json({ message: "Esta tienda no es de agendamiento" });
-    }
+    if (store.mode !== "bookings")
+      return res.status(400).json({ message: "Esta tienda no es de agendamiento" });
 
     const bookings = await Booking.find({ store: store._id })
       .sort({ date: 1, slot: 1 })
@@ -406,48 +461,24 @@ export const createAppointment = async (req, res) => {
 
   try {
     const store = await Store.findById(id).lean();
+    if (!store) return res.status(404).json({ message: "Tienda no encontrada" });
+    if (store.mode !== "bookings")
+      return res.status(400).json({ message: "Esta tienda no permite agendar citas" });
 
-    if (!store) {
-      return res.status(404).json({ message: "Tienda no encontrada" });
-    }
-
-    if (store.mode !== "bookings") {
-      return res
-        .status(400)
-        .json({ message: "Esta tienda no permite agendar citas" });
-    }
-
-    const { customerName, customerEmail, customerPhone, date, slot, notes } =
-      req.body || {};
-
+    const { customerName, customerEmail, customerPhone, date, slot, notes } = req.body || {};
     if (!customerName || !date || !slot) {
-      return res.status(400).json({
-        message: "Nombre del cliente, fecha y horario son obligatorios",
-      });
+      return res.status(400).json({ message: "Nombre del cliente, fecha y horario son obligatorios" });
     }
 
     const normalizedDate = normalizeDateOnly(date);
-
-    if (!normalizedDate) {
-      return res
-        .status(400)
-        .json({ message: "La fecha proporcionada no es válida" });
-    }
-
-    if (!SLOT_REGEX.test(slot)) {
-      return res.status(400).json({ message: "El horario no es válido" });
-    }
+    if (!normalizedDate) return res.status(400).json({ message: "La fecha proporcionada no es válida" });
+    if (!SLOT_REGEX.test(slot)) return res.status(400).json({ message: "El horario no es válido" });
 
     const dayKey = DAY_FROM_INDEX[normalizedDate.getUTCDay()];
-
-    const dayAvailability = (store.bookingAvailability || []).find(
-      (entry) => entry.dayOfWeek === dayKey
-    );
+    const dayAvailability = (store.bookingAvailability || []).find((e) => e.dayOfWeek === dayKey);
 
     if (!dayAvailability || !dayAvailability.slots.includes(slot)) {
-      return res
-        .status(400)
-        .json({ message: "El horario seleccionado no está disponible" });
+      return res.status(400).json({ message: "El horario seleccionado no está disponible" });
     }
 
     try {
@@ -473,9 +504,7 @@ export const createAppointment = async (req, res) => {
       });
     } catch (err) {
       if (err?.code === 11000) {
-        return res.status(409).json({
-          message: "Ese horario ya fue reservado. Elige otro.",
-        });
+        return res.status(409).json({ message: "Ese horario ya fue reservado. Elige otro." });
       }
       throw err;
     }
@@ -485,41 +514,25 @@ export const createAppointment = async (req, res) => {
   }
 };
 
-// 🔹 Actualizar estado de una cita (pendiente / confirmada / cancelada)
 export const updateAppointmentStatus = async (req, res) => {
-  const { id } = req.params; // id de la tienda
-  const { bookingId } = req.params;
+  const { id, bookingId } = req.params;
   const userId = req.user.id;
   const { status } = req.body;
 
   try {
     const { store, error } = await findStoreForOwner(id, userId);
+    if (error) return res.status(error.status).json({ message: error.message });
 
-    if (error) {
-      return res.status(error.status).json({ message: error.message });
-    }
-
-    if (store.mode !== "bookings") {
-      return res
-        .status(400)
-        .json({ message: "Esta tienda no es de agendamiento" });
-    }
+    if (store.mode !== "bookings")
+      return res.status(400).json({ message: "Esta tienda no es de agendamiento" });
 
     const allowed = ["pending", "confirmed", "cancelled"];
     if (!allowed.includes(status)) {
-      return res.status(400).json({
-        message: "Estado inválido. Usa: pending, confirmed o cancelled",
-      });
+      return res.status(400).json({ message: "Estado inválido. Usa: pending, confirmed o cancelled" });
     }
 
-    const booking = await Booking.findOne({
-      _id: bookingId,
-      store: store._id,
-    });
-
-    if (!booking) {
-      return res.status(404).json({ message: "Reserva no encontrada" });
-    }
+    const booking = await Booking.findOne({ _id: bookingId, store: store._id });
+    if (!booking) return res.status(404).json({ message: "Reserva no encontrada" });
 
     booking.status = status;
     await booking.save();
@@ -537,44 +550,58 @@ export const updateAppointmentStatus = async (req, res) => {
     });
   } catch (err) {
     console.error("Error al actualizar estado de reserva:", err);
-    return res
-      .status(500)
-      .json({ message: "Error al actualizar el estado de la reserva" });
+    return res.status(500).json({ message: "Error al actualizar el estado de la reserva" });
   }
 };
 
-// 🔹 Productos para tiendas de ventas
-const mapProductResponse = (product) => ({
-  _id: product._id,
-  name: product.name,
-  description: product.description,
-  price: product.price,
-  images: product.images || [],
-  isActive: product.isActive,
-  createdAt: product.createdAt,
-  updatedAt: product.updatedAt,
-});
+/* =============== PRODUCTS =============== */
 
-// Lista de productos visibles para clientes (vista pública)
-export const listStoreProducts = async (req, res) => {
+// Catálogo público (robusto contra distintos campos)
+export const listStoreProductsPublic = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const products = await Product.find({ store: id, active: true })
-      // 👇 Ajusta el nombre del campo de imagen según tu modelo:
-      // si en el schema el campo se llama "imageUrl", deja "imageUrl"
-      // si se llama "image", cámbialo por "image"
-      .select("name description price imageUrl");
+    const products = await Product.find({
+      $and: [
+        { $or: [{ store: id }, { storeId: id }] },
+        { $or: [{ isActive: { $ne: false } }, { active: true }] },
+        { isDeleted: { $ne: true } },
+      ],
+    })
+      .sort({ createdAt: 1 })
+      .lean();
 
     return res.json(products);
-  } catch (error) {
-    console.error("Error al listar productos públicos", error);
-    return res.status(500).json({
-      message: "No se pudo cargar el catálogo de productos",
-    });
+  } catch (err) {
+    console.error("Error al listar productos públicos:", err);
+    return res
+      .status(500)
+      .json({ message: "No se pudo cargar el catálogo de productos." });
   }
 };
 
+// Catálogo público simple (lo usa tu StorePublic.jsx)
+export const listStoreProducts = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const products = await Product.find({ store: id, isActive: { $ne: false } })
+      .select("name description price imageUrl images")
+      .lean();
+
+    return res.json(
+      (products || []).map((p) => ({
+        _id: p._id,
+        name: p.name,
+        description: p.description,
+        price: p.price,
+        imageUrl: p.imageUrl || p.images?.[0] || "",
+      }))
+    );
+  } catch (error) {
+    console.error("Error al listar productos públicos", error);
+    return res.status(500).json({ message: "No se pudo cargar el catálogo de productos" });
+  }
+};
 
 export const listStoreProductsForOwner = async (req, res) => {
   const { id } = req.params;
@@ -582,16 +609,10 @@ export const listStoreProductsForOwner = async (req, res) => {
 
   try {
     const { store, error } = await findStoreForOwner(id, userId);
+    if (error) return res.status(error.status).json({ message: error.message });
 
-    if (error) {
-      return res.status(error.status).json({ message: error.message });
-    }
-
-    if (store.mode !== "products") {
-      return res
-        .status(400)
-        .json({ message: "Esta tienda no vende productos" });
-    }
+    if (store.mode !== "products")
+      return res.status(400).json({ message: "Esta tienda no vende productos" });
 
     const products = await Product.find({ store: store._id })
       .sort({ createdAt: -1 })
@@ -604,52 +625,26 @@ export const listStoreProductsForOwner = async (req, res) => {
   }
 };
 
-const parseImages = (images) => {
-  if (!images) return [];
-  if (Array.isArray(images)) {
-    return images
-      .filter((img) => typeof img === "string" && img.trim().length > 0)
-      .map((img) => img.trim());
-  }
-  if (typeof images === "string" && images.trim()) {
-    return images
-      .split(/[\n,]+/)
-      .map((img) => img.trim())
-      .filter((img) => img.length > 0);
-  }
-  return [];
-};
-
 export const createStoreProduct = async (req, res) => {
   const { id } = req.params;
   const userId = req.user.id;
 
   try {
     const { store, error } = await findStoreForOwner(id, userId);
+    if (error) return res.status(error.status).json({ message: error.message });
 
-    if (error) {
-      return res.status(error.status).json({ message: error.message });
-    }
+    if (store.mode !== "products")
+      return res.status(400).json({ message: "Esta tienda no vende productos" });
 
-    if (store.mode !== "products") {
-      return res
-        .status(400)
-        .json({ message: "Esta tienda no vende productos" });
-    }
-
-    const { name, description, price, images, isActive } = req.body || {};
+    const { name, description, price, images, isActive, stock } = req.body || {};
 
     if (!name || typeof price === "undefined") {
-      return res.status(400).json({
-        message: "Nombre y precio del producto son obligatorios",
-      });
+      return res.status(400).json({ message: "Nombre y precio del producto son obligatorios" });
     }
 
     const numericPrice = Number(price);
     if (Number.isNaN(numericPrice) || numericPrice < 0) {
-      return res
-        .status(400)
-        .json({ message: "El precio debe ser un número válido" });
+      return res.status(400).json({ message: "El precio debe ser un número válido" });
     }
 
     const product = await Product.create({
@@ -659,6 +654,7 @@ export const createStoreProduct = async (req, res) => {
       price: numericPrice,
       images: parseImages(images),
       isActive: typeof isActive === "boolean" ? isActive : true,
+      stock: typeof stock === "number" ? stock : 0,
     });
 
     res.status(201).json(mapProductResponse(product));
@@ -674,37 +670,34 @@ export const updateStoreProduct = async (req, res) => {
 
   try {
     const { store, error } = await findStoreForOwner(id, userId);
+    if (error) return res.status(error.status).json({ message: error.message });
 
-    if (error) {
-      return res.status(error.status).json({ message: error.message });
-    }
-
-    if (store.mode !== "products") {
-      return res
-        .status(400)
-        .json({ message: "Esta tienda no vende productos" });
-    }
+    if (store.mode !== "products")
+      return res.status(400).json({ message: "Esta tienda no vende productos" });
 
     const { name, description, price, images, isActive } = req.body || {};
 
     const update = {};
+    
     if (typeof name !== "undefined") update.name = name;
     if (typeof description !== "undefined") update.description = description;
     if (typeof price !== "undefined") {
       const numericPrice = Number(price);
       if (Number.isNaN(numericPrice) || numericPrice < 0) {
-        return res
-          .status(400)
-          .json({ message: "El precio debe ser un número válido" });
+        return res.status(400).json({ message: "El precio debe ser un número válido" });
       }
       update.price = numericPrice;
     }
-    if (typeof images !== "undefined") {
-      update.images = parseImages(images);
-    }
-    if (typeof isActive !== "undefined") {
-      update.isActive = Boolean(isActive);
-    }
+    if (typeof images !== "undefined") update.images = parseImages(images);
+    if (typeof isActive !== "undefined") update.isActive = Boolean(isActive);
+    if (typeof stock !== "undefined") {
+  const numericStock = Number(stock);
+  if (Number.isNaN(numericStock) || numericStock < 0) {
+    return res.status(400).json({ message: "El stock debe ser válido" });
+  }
+  update.stock = numericStock;
+}
+
 
     const product = await Product.findOneAndUpdate(
       { _id: productId, store: store._id },
@@ -712,10 +705,7 @@ export const updateStoreProduct = async (req, res) => {
       { new: true }
     ).lean();
 
-    if (!product) {
-      return res.status(404).json({ message: "Producto no encontrado" });
-    }
-
+    if (!product) return res.status(404).json({ message: "Producto no encontrado" });
     res.json(mapProductResponse(product));
   } catch (err) {
     console.error("Error al actualizar producto:", err);
@@ -729,25 +719,13 @@ export const deleteStoreProduct = async (req, res) => {
 
   try {
     const { store, error } = await findStoreForOwner(id, userId);
+    if (error) return res.status(error.status).json({ message: error.message });
 
-    if (error) {
-      return res.status(error.status).json({ message: error.message });
-    }
+    if (store.mode !== "products")
+      return res.status(400).json({ message: "Esta tienda no vende productos" });
 
-    if (store.mode !== "products") {
-      return res
-        .status(400)
-        .json({ message: "Esta tienda no vende productos" });
-    }
-
-    const deleted = await Product.findOneAndDelete({
-      _id: productId,
-      store: store._id,
-    });
-
-    if (!deleted) {
-      return res.status(404).json({ message: "Producto no encontrado" });
-    }
+    const deleted = await Product.findOneAndDelete({ _id: productId, store: store._id });
+    if (!deleted) return res.status(404).json({ message: "Producto no encontrado" });
 
     res.json({ success: true });
   } catch (err) {
@@ -756,23 +734,18 @@ export const deleteStoreProduct = async (req, res) => {
   }
 };
 
-// 🔹 Pedidos
+/* =============== ORDERS =============== */
+
 export const listStoreOrders = async (req, res) => {
   const { id } = req.params;
   const userId = req.user.id;
 
   try {
     const { store, error } = await findStoreForOwner(id, userId);
+    if (error) return res.status(error.status).json({ message: error.message });
 
-    if (error) {
-      return res.status(error.status).json({ message: error.message });
-    }
-
-    if (store.mode !== "products") {
-      return res
-        .status(400)
-        .json({ message: "Esta tienda no vende productos" });
-    }
+    if (store.mode !== "products")
+      return res.status(400).json({ message: "Esta tienda no vende productos" });
 
     const orders = await Order.find({ store: store._id })
       .sort({ createdAt: -1 })
@@ -803,16 +776,10 @@ export const createStoreOrder = async (req, res) => {
 
   try {
     const store = await Store.findById(id).lean();
+    if (!store) return res.status(404).json({ message: "Tienda no encontrada" });
 
-    if (!store) {
-      return res.status(404).json({ message: "Tienda no encontrada" });
-    }
-
-    if (store.mode !== "products") {
-      return res
-        .status(400)
-        .json({ message: "Esta tienda no vende productos" });
-    }
+    if (store.mode !== "products")
+      return res.status(400).json({ message: "Esta tienda no vende productos" });
 
     const {
       items,
@@ -823,17 +790,9 @@ export const createStoreOrder = async (req, res) => {
       notes,
     } = req.body || {};
 
-    if (!customerName) {
-      return res
-        .status(400)
-        .json({ message: "El nombre del cliente es obligatorio" });
-    }
-
-    if (!Array.isArray(items) || items.length === 0) {
-      return res
-        .status(400)
-        .json({ message: "Debes seleccionar al menos un producto" });
-    }
+    if (!customerName) return res.status(400).json({ message: "El nombre del cliente es obligatorio" });
+    if (!Array.isArray(items) || items.length === 0)
+      return res.status(400).json({ message: "Debes seleccionar al menos un producto" });
 
     const cleanedItems = items
       .map((item) => ({
@@ -843,12 +802,10 @@ export const createStoreOrder = async (req, res) => {
       .filter((item) => item.productId && item.quantity > 0);
 
     if (cleanedItems.length === 0) {
-      return res.status(400).json({
-        message: "Los productos seleccionados no son válidos",
-      });
+      return res.status(400).json({ message: "Los productos seleccionados no son válidos" });
     }
 
-    const productIds = cleanedItems.map((item) => item.productId);
+    const productIds = cleanedItems.map((i) => i.productId);
     const products = await Product.find({
       _id: { $in: productIds },
       store: store._id,
@@ -856,20 +813,14 @@ export const createStoreOrder = async (req, res) => {
     }).lean();
 
     if (products.length !== cleanedItems.length) {
-      return res.status(400).json({
-        message: "Uno o más productos ya no están disponibles",
-      });
+      return res.status(400).json({ message: "Uno o más productos ya no están disponibles" });
     }
 
     const orderItems = cleanedItems.map((item) => {
-      const product = products.find(
-        (p) => p._id.toString() === item.productId.toString()
-      );
-
+      const product = products.find((p) => p._id.toString() === item.productId.toString());
       const quantity = item.quantity;
       const unitPrice = product.price;
       const subtotal = Math.round(unitPrice * quantity * 100) / 100;
-
       return {
         product: product._id,
         productName: product.name,

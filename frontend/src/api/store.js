@@ -1,18 +1,18 @@
 // frontend/src/api/store.js
 import axios from "axios";
 
-// Puedes ajustar la URL si tu backend corre en otro puerto
+// Ajusta la URL si tu backend corre en otro puerto/dominio
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || "http://localhost:3000/api",
   withCredentials: true,
 });
 
-/**
+/* =====================================
  * 🔹 TIENDAS PÚBLICAS (explorar / mapa)
- */
+ * ===================================== */
 export const listPublicStores = async (params = {}) => {
   const res = await api.get("/stores/public", { params });
-  return res; // <-- devolvemos el response completo
+  return res;
 };
 
 export const getStoreById = async (id) => {
@@ -20,39 +20,59 @@ export const getStoreById = async (id) => {
   return res;
 };
 
-/**
+/* =====================================
  * 🔹 MIS TIENDAS (dueño)
- * OnboardingPage.jsx espera listMyStores 👇
- */
+ * ===================================== */
 export const listMyStores = async () => {
   const res = await api.get("/stores/my");
   return res;
 };
 
-// Crear o actualizar una tienda del usuario logueado
+// Crear o actualizar (modo "guardar" centralizado del panel)
+// - Si envías payload con _id, el back actualiza ese registro.
+// - Úsalo para el formulario general del panel "Mi tienda".
 export const saveMyStore = async (payload) => {
   const res = await api.post("/stores/my", payload);
   return res;
 };
 
-// 🔹 NUEVA: actualizar tienda existente usando el mismo endpoint
+// ✅ NUEVO coherente con rutas: update parcial por ID (whitelist bg*)
+// Úsalo cuando ya tienes el ID de la tienda y solo quieres actualizar campos permitidos.
 export const updateMyStore = async (id, payload) => {
-  const res = await api.post("/stores/my", { ...payload, _id: id });
+  const res = await api.put(`/stores/${id}`, payload);
   return res;
 };
 
-/**
- * 🔹 AGENDAMIENTO (tiendas modo "bookings")
- */
+// Eliminar tienda del dueño
+export const deleteMyStore = async (id) => {
+  const res = await api.delete(`/stores/my/${id}`);
+  return res;
+};
+
+/* =====================================
+ * 🔹 SUBIR LOGO DE TIENDA
+ * ===================================== */
+export const uploadStoreLogo = async (storeId, file) => {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("storeId", storeId);
+
+  const res = await api.post("/upload/store-logo", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return res;
+};
+
+/* =====================================
+ * 🔹 AGENDAMIENTO (bookings)
+ * ===================================== */
 export const getStoreAvailability = async (id) => {
   const res = await api.get(`/stores/${id}/availability`);
   return res;
 };
 
 export const updateStoreAvailability = async (id, availability) => {
-  const res = await api.put(`/stores/${id}/availability`, {
-    availability,
-  });
+  const res = await api.put(`/stores/${id}/availability`, { availability });
   return res;
 };
 
@@ -67,29 +87,23 @@ export const createAppointment = async (id, payload) => {
 };
 
 export const updateAppointmentStatus = async (id, bookingId, status) => {
-  const res = await api.patch(
-    `/stores/${id}/appointments/${bookingId}/status`,
-    { status }
-  );
+  const res = await api.patch(`/stores/${id}/appointments/${bookingId}/status`, { status });
   return res;
 };
 
-/**
- * 🔹 PRODUCTOS (tiendas modo "products")
- *  - catálogo público (cliente)
- *  - administración (dueño)
- */
-
-// Catálogo que ve el cliente
+/* =====================================
+ * 🔹 PRODUCTOS (products)
+ * ===================================== */
+// Catálogo público (compat)
 export const listStoreProductsPublic = async (id) => {
   const res = await api.get(`/stores/${id}/public-products`);
   return res;
 };
 
-// Compatibilidad con código antiguo: algunos componentes usan listStoreProducts
+// Para tu vista pública actual puedes reutilizar el catálogo público:
 export const listStoreProducts = listStoreProductsPublic;
 
-// Lista de productos para el dueño
+// CRUD para el dueño
 export const listStoreProductsForOwner = async (id) => {
   const res = await api.get(`/stores/${id}/products`);
   return res;
@@ -110,9 +124,9 @@ export const deleteStoreProduct = async (id, productId) => {
   return res;
 };
 
-/**
- * 🔹 PEDIDOS (para tiendas de productos)
- */
+/* =====================================
+ * 🔹 PEDIDOS (orders)
+ * ===================================== */
 export const listStoreOrders = async (id) => {
   const res = await api.get(`/stores/${id}/orders`);
   return res;
@@ -123,5 +137,4 @@ export const createStoreOrder = async (id, payload) => {
   return res;
 };
 
-// Por si en algún sitio importas el cliente axios por defecto
 export default api;
