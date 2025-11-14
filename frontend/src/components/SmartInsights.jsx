@@ -49,6 +49,50 @@ export default function SmartInsights({ storeId, mode }) {
     }
   };
 
+  const summary =
+    data && typeof data.summary === "object" && data.summary !== null
+      ? data.summary
+      : {};
+  const suggestions = Array.isArray(data?.suggestions)
+    ? data.suggestions
+    : Array.isArray(data?.tips)
+    ? data.tips
+    : [];
+
+  const normalizedSummary = useMemo(() => {
+    if (!summary || typeof summary !== "object") return {};
+    return {
+      ...summary,
+      totalOrders:
+        summary.totalOrders ?? summary.orders ?? summary.total ?? 0,
+      totalItemsSold:
+        summary.totalItemsSold ?? summary.itemsSold ?? summary.units ?? 0,
+      totalRevenue:
+        summary.totalRevenue ?? summary.revenue ?? summary.totalSales ?? 0,
+      averageOrderValue:
+        summary.averageOrderValue ?? summary.averageTicket ?? summary.ticket ?? 0,
+      uniqueProducts:
+        summary.uniqueProducts ?? summary.totalProducts ?? summary.products ?? 0,
+      totalProducts:
+        summary.totalProducts ?? summary.uniqueProducts ?? summary.products ?? 0,
+      totalAppointments:
+        summary.totalAppointments ?? summary.totalBookings ?? summary.totalCitas ?? 0,
+      confirmed: summary.confirmed ?? summary.completed ?? summary.approved ?? 0,
+      cancelled: summary.cancelled ?? summary.canceled ?? 0,
+      completionRate:
+        summary.completionRate ?? summary.confirmationRate ?? summary.successRate ?? 0,
+      windowInDays: summary.windowInDays ?? summary.days ?? null,
+    };
+  }, [summary]);
+
+  const summaryWindowLabel = useMemo(() => {
+    if (!normalizedSummary?.windowInDays) return null;
+    if (normalizedSummary.windowInDays === 1) return "Últimas 24h";
+    if (normalizedSummary.windowInDays === 7) return "Últimos 7 días";
+    if (normalizedSummary.windowInDays === 30) return "Últimos 30 días";
+    return `Últimos ${normalizedSummary.windowInDays} días`;
+  }, [normalizedSummary.windowInDays]);
+
   if (loading) {
     return (
       <div className="bg-white/95 border rounded-2xl p-4 shadow-sm text-sm text-slate-500">
