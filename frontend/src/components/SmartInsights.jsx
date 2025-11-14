@@ -111,6 +111,16 @@ export default function SmartInsights({ storeId, mode }) {
 
   if (!data) return null;
 
+  const { summary = {}, suggestions = [] } = data;
+
+  const summaryWindowLabel = useMemo(() => {
+    if (!summary?.windowInDays) return null;
+    if (summary.windowInDays === 1) return "Últimas 24h";
+    if (summary.windowInDays === 7) return "Últimos 7 días";
+    if (summary.windowInDays === 30) return "Últimos 30 días";
+    return `Últimos ${summary.windowInDays} días`;
+  }, [summary?.windowInDays]);
+
   return (
     <section className="bg-white/95 border rounded-2xl p-5 shadow-sm space-y-4">
       <div className="flex items-center justify-between gap-2">
@@ -142,23 +152,23 @@ export default function SmartInsights({ storeId, mode }) {
         <div className="grid gap-3 md:grid-cols-5 text-xs">
           <MetricCard
             label="Pedidos en el período"
-            value={formatNumber(normalizedSummary?.totalOrders ?? 0)}
+            value={formatNumber(summary?.totalOrders ?? 0)}
           />
           <MetricCard
             label="Unidades vendidas"
-            value={formatNumber(normalizedSummary?.totalItemsSold ?? 0)}
+            value={formatNumber(summary?.totalItemsSold ?? 0)}
           />
           <MetricCard
             label="Ingresos estimados"
-            value={formatCurrency(normalizedSummary?.totalRevenue ?? 0)}
+            value={formatCurrency(summary?.totalRevenue ?? 0)}
           />
           <MetricCard
             label="Ticket promedio"
-            value={formatCurrency(normalizedSummary?.averageOrderValue ?? 0)}
+            value={formatCurrency(summary?.averageOrderValue ?? 0)}
           />
           <MetricCard
             label="Productos distintos vendidos"
-            value={formatNumber(normalizedSummary?.uniqueProducts ?? 0)}
+            value={formatNumber(summary?.uniqueProducts ?? 0)}
           />
         </div>
       )}
@@ -167,15 +177,15 @@ export default function SmartInsights({ storeId, mode }) {
         <div className="grid gap-3 md:grid-cols-4 text-xs">
           <MetricCard
             label="Citas totales"
-            value={formatNumber(normalizedSummary?.totalAppointments ?? 0)}
+            value={formatNumber(summary?.totalAppointments ?? 0)}
           />
           <MetricCard
             label="Confirmadas"
-            value={formatNumber(normalizedSummary?.confirmed ?? 0)}
+            value={formatNumber(summary?.confirmed ?? 0)}
           />
           <MetricCard
             label="Canceladas"
-            value={formatNumber(normalizedSummary?.cancelled ?? 0)}
+            value={formatNumber(summary?.cancelled ?? 0)}
           />
           <MetricCard
             label="Tasa de cumplimiento"
@@ -418,7 +428,7 @@ function BookingsDetail({ data }) {
                     </span>
                   )}
                 </div>
-                <span className="font-semibold">{formatNumber(s.total ?? 0)} citas</span>
+                <span className="font-semibold">{formatNumber(s.total ?? s.count ?? 0)} citas</span>
               </li>
             ))}
           </ul>
