@@ -61,6 +61,9 @@ const normalizeDateOnly = (dateString) => {
   return date;
 };
 
+const normalizeStoreMode = (store) =>
+  store?.mode === "bookings" ? "bookings" : "products";
+
 const findStoreForOwner = async (storeId, userId) => {
   const store = await Store.findById(storeId);
   if (!store) return { error: { status: 404, message: "Tienda no encontrada" } };
@@ -111,7 +114,15 @@ export const listPublicStores = async (req, res) => {
     const query = { isActive: true };
     if (comuna) query.comuna = comuna;
     if (tipoNegocio) query.tipoNegocio = tipoNegocio;
-    if (mode) query.mode = mode;
+    if (mode === "bookings") {
+      query.mode = "bookings";
+    } else if (mode === "products") {
+      query.$or = [
+        { mode: "products" },
+        { mode: { $exists: false } },
+        { mode: null },
+      ];
+    }
 
     const stores = await Store.find(query)
       .populate("owner", "username avatarUrl")
@@ -125,7 +136,7 @@ export const listPublicStores = async (req, res) => {
         logoUrl: s.logoUrl,
         comuna: s.comuna,
         tipoNegocio: s.tipoNegocio,
-        mode: s.mode,
+        mode: normalizeStoreMode(s),
         lat: s.lat,
         lng: s.lng,
         direccion: s.direccion,
@@ -353,7 +364,7 @@ export const getStoreById = async (req, res) => {
       logoUrl: store.logoUrl,
       comuna: store.comuna,
       tipoNegocio: store.tipoNegocio,
-      mode: store.mode,
+      mode: normalizeStoreMode(store),
       bookingAvailability: store.bookingAvailability || [],
       direccion: store.direccion,
       lat: store.lat,
