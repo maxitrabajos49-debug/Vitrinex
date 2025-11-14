@@ -6,11 +6,13 @@ import {
   updateStoreProduct,
   deleteStoreProduct,
 } from "../api/store";
+import axios from "axios";
 
 const emptyForm = {
   name: "",
   description: "",
   price: "",
+  stock: "",
   images: "",
   isActive: true,
 };
@@ -21,30 +23,27 @@ export default function ProductManager({ storeId }) {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
   const [formError, setFormError] = useState("");
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  const [uploading, setUploading] = useState(false);
 
   const load = async () => {
     try {
       setLoading(true);
-      setError("");
       const { data } = await listStoreProductsForOwner(storeId);
-      setProducts(Array.isArray(data) ? data : []);
+      setProducts(data || []);
     } catch (err) {
-      console.error("Error al cargar productos", err?.response || err);
-      setError(err?.response?.data?.message || "No se pudieron cargar los productos");
+      setError("No se pudieron cargar los productos");
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    if (storeId) {
-      load();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (storeId) load();
   }, [storeId]);
 
   const onChange = (e) => {
@@ -66,22 +65,30 @@ export default function ProductManager({ storeId }) {
     e.preventDefault();
     setFormError("");
 
-    if (!form.name.trim()) {
-      setFormError("Ingresa el nombre del producto");
-      return;
-    }
+    if (!form.name.trim()) return setFormError("Ingresa el nombre del producto");
 
     const priceValue = Number(form.price);
-    if (Number.isNaN(priceValue) || priceValue < 0) {
-      setFormError("Ingresa un precio válido");
-      return;
-    }
+    if (Number.isNaN(priceValue) || priceValue < 0)
+      return setFormError("Ingresa un precio válido");
+
+    const stockValue = Number(form.stock);
+    if (Number.isNaN(stockValue) || stockValue < 0)
+      return setFormError("Ingresa un stock válido");
+
+    const images =
+      typeof form.images === "string"
+        ? form.images
+            .split(/[\n,]+/)
+            .map((s) => s.trim())
+            .filter(Boolean)
+        : [];
 
     const payload = {
       name: form.name.trim(),
       description: form.description,
       price: priceValue,
-      images: form.images,
+      stock: stockValue,
+      images,
       isActive: form.isActive,
     };
 
@@ -92,11 +99,12 @@ export default function ProductManager({ storeId }) {
       } else {
         await createStoreProduct(storeId, payload);
       }
+
       resetForm();
       await load();
     } catch (err) {
-      console.error("Error al guardar producto", err?.response || err);
-      setFormError(err?.response?.data?.message || "No se pudo guardar el producto");
+      console.log(err);
+      setFormError("No se pudo guardar el producto");
     } finally {
       setSaving(false);
     }
@@ -107,9 +115,8 @@ export default function ProductManager({ storeId }) {
     setForm({
       name: product.name || "",
       description: product.description || "",
-      price: product.price !== undefined && product.price !== null
-        ? String(product.price)
-        : "",
+      price: product.price ? String(product.price) : "",
+      stock: product.stock ? String(product.stock) : "",
       images: formatImagesForInput(product.images),
       isActive: Boolean(product.isActive),
     });
@@ -120,201 +127,214 @@ export default function ProductManager({ storeId }) {
 
     try {
       await deleteStoreProduct(storeId, productId);
-      await load();
+      setProducts((prev) => prev.filter((p) => p._id !== productId));
     } catch (err) {
-      console.error("Error al eliminar producto", err?.response || err);
-      alert(err?.response?.data?.message || "No se pudo eliminar el producto");
+      alert("No se pudo eliminar el producto");
+    }
+  };
+
+  const handleImageUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("storeId", storeId);
+
+    try {
+      setUploading(true);
+      const { data } = await axios.post(
+        "http://localhost:3000/api/upload/product-image",
+        formData,
+        {
+          headers: { "Content-Type": "multipart/form-data" },
+          withCredentials: true,
+        }
+      );
+
+      if (!data.imageUrl) {
+        alert("Error: no llegó URL desde el backend");
+        return;
+      }
+
+      setForm((prev) => ({
+        ...prev,
+        images: prev.images ? prev.images + "\n" + data.imageUrl : data.imageUrl,
+      }));
+    } catch (err) {
+      alert("No se pudo subir la imagen");
+    } finally {
+      setUploading(false);
+      e.target.value = "";
     }
   };
 
   return (
-    <section className="bg-white border rounded-2xl p-5 shadow-sm space-y-4">
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div>
-          <h3 className="text-lg font-semibold text-slate-800">
-            Catálogo de productos
-          </h3>
-          <p className="text-sm text-slate-500">
-            Gestiona los productos que ofreces en tu tienda.
-          </p>
-        </div>
-        {editingId && (
-          <button
-            type="button"
-            onClick={resetForm}
-            className="text-sm text-blue-600 hover:underline"
+    <section className="bg-white border rounded-2xl p-5 shadow-sm space-y-5">
+
+      {/* ================================
+          PANEL DE PRODUCTOS REGISTRADOS
+      ================================= */}
+      <h3 className="text-lg font-semibold text-slate-800">
+        Productos registrados
+      </h3>
+
+      {loading && <p>Cargando...</p>}
+      {error && <p className="text-red-600">{error}</p>}
+
+      <div className="space-y-3">
+        {products.map((product) => (
+          <article
+            key={product._id}
+            className="border bg-slate-50 rounded-xl p-3 flex gap-4"
           >
-            Cancelar edición
-          </button>
-        )}
+
+            {/* Imagen */}
+            <div className="w-20 h-20 bg-white rounded-lg border flex items-center justify-center overflow-hidden">
+              {product.images?.[0] ? (
+                <img
+                  src={product.images[0]}
+                  alt={product.name}
+                  className="object-contain w-full h-full"
+                />
+              ) : (
+                <span className="text-xs text-slate-400">Sin imagen</span>
+              )}
+            </div>
+
+            {/* Info */}
+            <div className="flex-1">
+              <p className="font-semibold">{product.name}</p>
+              <p className="text-xs text-slate-500">
+                Precio: ${product.price.toLocaleString()}
+              </p>
+              <p className="text-xs text-slate-500">
+                Stock: {product.stock}
+              </p>
+              {!product.isActive && (
+                <span className="text-[10px] text-red-500">
+                  (Oculto en la tienda pública)
+                </span>
+              )}
+            </div>
+
+            {/* Botones */}
+            <div className="flex flex-col gap-1 text-right">
+              <button
+                onClick={() => onEdit(product)}
+                className="text-blue-600 text-xs"
+              >
+                Editar
+              </button>
+              <button
+                onClick={() => onDelete(product._id)}
+                className="text-red-600 text-xs"
+              >
+                Eliminar
+              </button>
+            </div>
+
+          </article>
+        ))}
       </div>
 
-      <form onSubmit={onSubmit} className="grid gap-3 md:grid-cols-2">
-        <div className="md:col-span-2">
-          <label className="block text-xs font-medium text-slate-600 mb-1">
-            Nombre del producto
-          </label>
+      {/* ================================
+          FORMULARIO AGREGAR / EDITAR
+      ================================= */}
+      <h3 className="text-lg font-semibold text-slate-800">
+        {editingId ? "Editar producto" : "Agregar producto"}
+      </h3>
+
+      <form onSubmit={onSubmit} className="grid gap-3">
+
+        <div>
+          <label className="text-xs text-slate-600">Nombre</label>
           <input
             name="name"
             value={form.name}
             onChange={onChange}
-            className="w-full border rounded-lg px-3 py-2 text-sm"
-            placeholder="Ej: Servicio de manicure"
+            className="w-full border rounded-lg px-3 py-2"
           />
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">
-            Precio
-          </label>
+          <label className="text-xs text-slate-600">Precio</label>
           <input
             name="price"
+            type="number"
             value={form.price}
             onChange={onChange}
+            className="w-full border rounded-lg px-3 py-2"
+          />
+        </div>
+
+        <div>
+          <label className="text-xs text-slate-600">Stock</label>
+          <input
+            name="stock"
             type="number"
-            step="0.01"
-            min="0"
-            className="w-full border rounded-lg px-3 py-2 text-sm"
+            value={form.stock}
+            onChange={onChange}
+            className="w-full border rounded-lg px-3 py-2"
           />
         </div>
 
         <div className="flex items-center gap-2">
           <input
-            id="isActive"
             type="checkbox"
             name="isActive"
             checked={form.isActive}
             onChange={onChange}
           />
-          <label htmlFor="isActive" className="text-xs text-slate-600">
-            Mostrar producto en la tienda pública
-          </label>
+          <span className="text-xs text-slate-600">Mostrar en tienda pública</span>
         </div>
 
-        <div className="md:col-span-2">
-          <label className="block text-xs font-medium text-slate-600 mb-1">
-            Descripción
-          </label>
+        <div>
+          <label className="text-xs text-slate-600">Descripción</label>
           <textarea
             name="description"
             value={form.description}
             onChange={onChange}
             rows={3}
-            className="w-full border rounded-lg px-3 py-2 text-sm"
-            placeholder="Describe los beneficios de tu producto"
+            className="w-full border rounded-lg px-3 py-2"
           />
         </div>
 
-        <div className="md:col-span-2">
-          <label className="block text-xs font-medium text-slate-600 mb-1">
-            Imágenes (una por línea o separadas por coma)
-          </label>
+        <div>
+          <label className="text-xs text-slate-600">Imágenes</label>
+          <input type="file" onChange={handleImageUpload} />
           <textarea
             name="images"
             value={form.images}
             onChange={onChange}
             rows={3}
-            className="w-full border rounded-lg px-3 py-2 text-sm"
+            className="w-full border rounded-lg px-3 py-2 mt-2"
             placeholder="https://..."
           />
         </div>
 
-        {formError && (
-          <p className="md:col-span-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-            {formError}
-          </p>
-        )}
+        {formError && <p className="text-red-600 text-sm">{formError}</p>}
 
-        <div className="md:col-span-2 flex justify-end">
+        <div className="flex gap-2">
           <button
             type="submit"
             disabled={saving}
-            className="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded-lg disabled:opacity-60"
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg"
           >
-            {saving ? "Guardando…" : editingId ? "Actualizar producto" : "Agregar producto"}
+            {saving ? "Guardando..." : editingId ? "Guardar cambios" : "Agregar producto"}
           </button>
+
+          {editingId && (
+            <button
+              type="button"
+              onClick={resetForm}
+              className="bg-slate-300 text-slate-800 px-4 py-2 rounded-lg"
+            >
+              Cancelar edición
+            </button>
+          )}
         </div>
       </form>
 
-      <div className="border-t border-slate-200 pt-4 space-y-3">
-        <h4 className="font-semibold text-slate-700">Productos registrados</h4>
-
-        {loading && <p className="text-sm text-slate-500">Cargando productos…</p>}
-
-        {error && (
-          <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-            {error}
-          </p>
-        )}
-
-        {!loading && products.length === 0 && !error && (
-          <p className="text-sm text-slate-500">
-            Aún no tienes productos publicados. Agrega tu primer producto usando
-            el formulario superior.
-          </p>
-        )}
-
-        <div className="grid gap-3">
-          {products.map((product) => (
-            <article
-              key={product._id}
-              className="border border-slate-200 rounded-xl px-4 py-3 space-y-2"
-            >
-              <div className="flex items-center justify-between gap-3 flex-wrap">
-                <div>
-                  <h5 className="text-sm font-semibold text-slate-800">
-                    {product.name}
-                  </h5>
-                  <p className="text-xs text-slate-500">
-                    ${" "}
-                    {Number(product.price).toLocaleString("es-CL", {
-                      style: "currency",
-                      currency: "CLP",
-                      minimumFractionDigits: 0,
-                    })}
-                  </p>
-                  {!product.isActive && (
-                    <span className="text-xs text-amber-600">Oculto en la tienda</span>
-                  )}
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => onEdit(product)}
-                    className="text-xs text-blue-600 hover:underline"
-                  >
-                    Editar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onDelete(product._id)}
-                    className="text-xs text-red-600 hover:underline"
-                  >
-                    Eliminar
-                  </button>
-                </div>
-              </div>
-
-              {product.description && (
-                <p className="text-xs text-slate-600">{product.description}</p>
-              )}
-
-              {Array.isArray(product.images) && product.images.length > 0 && (
-                <div className="flex gap-2 flex-wrap">
-                  {product.images.map((img) => (
-                    <img
-                      key={img}
-                      src={img}
-                      alt={product.name}
-                      className="h-16 w-16 rounded-lg object-cover border"
-                    />
-                  ))}
-                </div>
-              )}
-            </article>
-          ))}
-        </div>
-      </div>
     </section>
   );
 }

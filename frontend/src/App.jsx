@@ -1,51 +1,76 @@
-// src/App.jsx
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
+import { useAuth } from "./context/AuthContext";
 
+// Páginas
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
-import DashboardPage from "./pages/DashboardPage";
-import TasksPage from "./pages/TasksPage";
-import TaskFormPage from "./pages/TaskFormPage";
-import OnboardingPage from "./pages/OnboardingPage";
-import ExploreStoresPage from "./pages/ExploreStoresPage";
-import UserProfilePage from "./pages/UserProfilePage";
-import StorePublicPage from "./pages/StorePublic";
 import StoreProfilePage from "./pages/StoreProfilePage";
+import StorePublicPage from "./pages/StorePublic";
+import CustomerProfilePage from "./pages/CustomerProfilePage";
+import CustomerPublicPage from "./pages/CustomerPublicPage";
+import ExploreStoresPage from "./pages/ExploreStoresPage";
+import OnboardingPage from "./pages/OnboardingPage";
 
-import ProtectedRoute from "./components/ProtectedRoute";
-import Layout from "./components/Layout";
+// Ruta protegida
+function ProtectedRoute({ children }) {
+  const { isAuthenticated, loading } = useAuth();
+
+  if (loading)
+    return (
+      <div className="text-center py-10 text-slate-600 font-medium">
+        Cargando sesión...
+      </div>
+    );
+
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+
+  return children;
+}
 
 export default function App() {
   return (
     <Routes>
-      {/* Home pública */}
+      {/* Home = Mapa */}
       <Route path="/" element={<ExploreStoresPage />} />
+      <Route path="/explorar" element={<ExploreStoresPage />} />
 
-      {/* Página pública de tienda */}
-      <Route path="/tienda/:id" element={<StorePublicPage />} />
-
-      {/* Auth pública */}
+      {/* Auth */}
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
 
-      {/* Rutas protegidas */}
-      <Route element={<ProtectedRoute />}>
-        {/* Panel interno con Layout (dashboard, tareas) */}
-        <Route element={<Layout />}>
-          <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/tasks" element={<TasksPage />} />
-          <Route path="/tasks/new" element={<TaskFormPage />} />
-          <Route path="/tasks/:id/edit" element={<TaskFormPage />} />
-        </Route>
+      {/* Cliente (privado y público) */}
+      <Route
+        path="/perfil"
+        element={
+          <ProtectedRoute>
+            <CustomerProfilePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route path="/usuario/:id" element={<CustomerPublicPage />} />
 
-        {/* Rutas con MainHeader */}
-        <Route path="/onboarding" element={<OnboardingPage />} />
-        <Route path="/perfil" element={<UserProfilePage />} />
-        <Route path="/negocio/:id" element={<StoreProfilePage />} />
-      </Route>
+      {/* Negocios (sin cambios) */}
+      <Route
+        path="/negocio/:id"
+        element={
+          <ProtectedRoute>
+            <StoreProfilePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route path="/tienda/:id" element={<StorePublicPage />} />
 
-      {/* 404 */}
-      <Route path="*" element={<h1>404 — Página no encontrada</h1>} />
+      <Route
+        path="/onboarding"
+        element={
+          <ProtectedRoute>
+            <OnboardingPage />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Fallback */}
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }

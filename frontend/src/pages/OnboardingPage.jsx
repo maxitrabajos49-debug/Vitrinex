@@ -1,7 +1,7 @@
 // src/pages/OnboardingPage.jsx
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { listMyStores, saveMyStore } from "../api/store";
+import { listMyStores, saveMyStore, deleteMyStore } from "../api/store";
 import MainHeader from "../components/MainHeader";
 
 export default function OnboardingPage() {
@@ -21,7 +21,6 @@ export default function OnboardingPage() {
     direccion: "",
   });
 
-  // editingId ahora se usa solo si editas desde el mismo onboarding (para nuevas tiendas lo dejamos en null)
   const [editingId, setEditingId] = useState(null);
   const [error, setError] = useState("");
 
@@ -78,9 +77,23 @@ export default function OnboardingPage() {
     setShowForm(true);
   };
 
-  // 👇 AHORA: en vez de editar inline, vamos a la página de perfil de la tienda
   const handleEditStore = (store) => {
     navigate(`/negocio/${store._id}`);
+  };
+
+  const handleDeleteStore = async (store) => {
+    const ok = window.confirm(
+      `¿Seguro que quieres eliminar el negocio "${store.name}"?`
+    );
+    if (!ok) return;
+
+    try {
+      await deleteMyStore(store._id);
+      await loadStores();
+    } catch (err) {
+      console.error("Error al eliminar tienda:", err);
+      setError("No se pudo eliminar la tienda.");
+    }
   };
 
   const getCoordinates = async (address) => {
@@ -129,7 +142,6 @@ export default function OnboardingPage() {
         lng: coords.lng,
       };
 
-      // En onboarding usamos esto solo para CREAR nuevas tiendas
       await saveMyStore(payload);
 
       resetForm();
@@ -142,7 +154,12 @@ export default function OnboardingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 flex flex-col">
+       <div
+  className="min-h-screen flex flex-col"
+  style={{
+    background: "linear-gradient(to bottom, #e1c0f6 0%, #ffffff 80%)",
+  }}
+>
       <MainHeader subtitle="Configura tus negocios en la plataforma" />
 
       <main className="flex-1 max-w-6xl mx-auto px-4 py-6 space-y-6">
@@ -190,26 +207,54 @@ export default function OnboardingPage() {
             {stores.map((store) => (
               <article
                 key={store._id}
-                className="bg-white border rounded-2xl p-4 shadow-sm flex flex-col gap-2"
+                className="bg-white border rounded-2xl p-4 shadow-sm flex gap-3 items-start"
               >
-                <div className="flex items-center justify-between">
-                  <h3 className="font-semibold text-slate-800">
-                    {store.name}
-                  </h3>
-                  <button
-                    onClick={() => handleEditStore(store)}
-                    className="text-xs px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50"
-                  >
-                    Editar
-                  </button>
-                </div>
-                <p className="text-xs text-slate-500">
-                  {store.comuna || "Sin comuna"} ·{" "}
-                  {store.tipoNegocio || "Tipo no especificado"}
-                </p>
-                {store.direccion && (
-                  <p className="text-xs text-slate-600">{store.direccion}</p>
+                {/* Logo / imagen del negocio */}
+                {store.logoUrl ? (
+                  <img
+                    src={store.logoUrl}
+                    alt={store.name}
+                    className="h-12 w-12 rounded-xl object-cover border flex-shrink-0"
+                  />
+                ) : (
+                  <div className="h-12 w-12 rounded-xl bg-slate-200 flex items-center justify-center text-slate-600 text-sm font-semibold flex-shrink-0">
+                    {store.name?.[0]?.toUpperCase() || "N"}
+                  </div>
                 )}
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <h3 className="font-semibold text-slate-800 text-sm truncate">
+                        {store.name}
+                      </h3>
+                      <p className="text-xs text-slate-500">
+                        {store.comuna || "Sin comuna"} ·{" "}
+                        {store.tipoNegocio || "Tipo no especificado"}
+                      </p>
+                      {store.direccion && (
+                        <p className="text-xs text-slate-600 mt-1">
+                          📍 {store.direccion}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <button
+                        onClick={() => handleEditStore(store)}
+                        className="text-[11px] px-2 py-1 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50"
+                      >
+                        Editar
+                      </button>
+                      <button
+                        onClick={() => handleDeleteStore(store)}
+                        className="text-[11px] px-2 py-1 rounded-lg border border-red-300 text-red-600 hover:bg-red-50"
+                      >
+                        Eliminar
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </article>
             ))}
           </div>

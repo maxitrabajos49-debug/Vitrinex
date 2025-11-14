@@ -8,3 +8,131 @@ body {
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
 }
+
+/* ==== React Calendar custom pro look ==== */
+.react-calendar {
+  border: none;
+  background: transparent;
+  font-family: inherit;
+}
+
+/* Días */
+.react-calendar__month-view__weekdays {
+  text-transform: capitalize;
+  font-size: 0.7rem;
+  color: #64748b;
+}
+
+.react-calendar__tile {
+  padding: 0.4rem 0.2rem;
+  border-radius: 999px;
+  transition: all 0.15s ease;
+}
+
+/* Hoy */
+.react-calendar__tile--now {
+  border: 1px solid #0ea5e9;
+  background: #f0f9ff;
+}
+
+/* Día con disponibilidad */
+.react-calendar__tile--has-availability {
+  background-color: #ecfdf5;
+  color: #166534;
+  font-weight: 500;
+}
+
+/* Día sin disponibilidad */
+.react-calendar__tile--no-availability {
+  color: #cbd5f5;
+}
+
+/* Seleccionado */
+.react-calendar__tile--active,
+.react-calendar__tile--has-availability.react-calendar__tile--active {
+  background-color: #2563eb !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.3);
+}
+
+/* Hover */
+.react-calendar__tile:enabled:hover {
+  background-color: #e2e8f0;
+}
+/* === Calendario de reservas (react-calendar) === */
+
+.react-calendar {
+  width: 100%;
+  border-radius: 1rem;
+  border: 1px solid #e2e8f0; /* slate-200 */
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
+}
+
+.react-calendar__navigation {
+  display: flex;
+  height: 2.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.react-calendar__navigation button {
+  color: #0f172a; /* slate-900 */
+  min-width: 2.5rem;
+  background: transparent;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.react-calendar__navigation button:disabled {
+  opacity: 0.3;
+}
+
+.react-calendar__month-view__weekdays {
+  text-transform: uppercase;
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: #64748b; /* slate-500 */
+}
+
+.react-calendar__tile {
+  border-radius: 999px;
+  padding: 0.4rem 0;
+  font-size: 0.75rem;
+  color: #0f172a;
+}
+
+/* Día de hoy */
+.react-calendar__tile--now {
+  background: #eff6ff; /* blue-50 */
+  border: 1px solid #38bdf8; /* sky-400 */
+  color: #0f172a;
+}
+
+/* Día seleccionado */
+.react-calendar__tile--active {
+  background: #2563eb !important; /* blue-600 */
+  color: #ffffff !important;
+}
+
+/* Días sin disponibilidad */
+.react-calendar__tile--no-availability {
+  background: #f8fafc; /* slate-50 */
+  color: #94a3b8; /* slate-400 */
+}
+
+/* Días con horarios disponibles */
+.react-calendar__tile--has-availability {
+  background: #ecfdf5; /* emerald-50 */
+  color: #047857; /* emerald-700 */
+  border: 1px solid #6ee7b7; /* emerald-300 */
+}
+
+/* Hover general */
+.react-calendar__tile:hover {
+  background: #e2e8f0; /* slate-200 */
+}
+
+/* Quitar borde del focus feo */
+.react-calendar__tile:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.35);
+}

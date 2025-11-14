@@ -1,56 +1,29 @@
-import { useEffect, useState, useRef } from "react";
+// frontend/src/pages/ExploreStoresPage.jsx
+import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
-import L from "leaflet";
-
-import { listPublicStores } from "../api/store";
+import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import MainHeader from "../components/MainHeader";
+import { listPublicStores } from "../api/store";
 
-import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
-import markerIcon from "leaflet/dist/images/marker-icon.png";
-import markerShadow from "leaflet/dist/images/marker-shadow.png";
-
-// Fix íconos Leaflet con Vite
-delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: markerIcon2x,
-  iconUrl: markerIcon,
-  shadowUrl: markerShadow,
-});
-
-const comunasMock = ["", "Renca", "Independencia", "Santiago", "Quilicura"];
-const tiposMock = ["", "Comida", "Almacén", "Supermercado", "Plantas"];
-const modesMock = [
-  { value: "", label: "Todos" },
-  { value: "products", label: "Productos" },
-  { value: "bookings", label: "Agendamiento" },
-];
-
-// 🔹 Componente auxiliar para centrar el mapa en una tienda seleccionada
-function FlyToStore({ selectedStore }) {
-  const map = useMap();
-  useEffect(() => {
-    if (selectedStore?.lat && selectedStore?.lng) {
-      map.flyTo([selectedStore.lat, selectedStore.lng], 16, {
-        duration: 1.5,
-      });
-    }
-  }, [selectedStore, map]);
-  return null;
-}
+const INITIAL_CENTER = [-33.4489, -70.6693]; // Santiago
+const INITIAL_ZOOM = 12;
 
 export default function ExploreStoresPage() {
+  const navigate = useNavigate();
+
   const [stores, setStores] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
   const [filters, setFilters] = useState({
     comuna: "",
     tipoNegocio: "",
     mode: "",
   });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [selectedStore, setSelectedStore] = useState(null);
-  const navigate = useNavigate();
-  const mapRef = useRef(null);
+
+  const [mapCenter, setMapCenter] = useState(INITIAL_CENTER);
+  const [mapZoom, setMapZoom] = useState(INITIAL_ZOOM);
+  const [selectedStoreId, setSelectedStoreId] = useState(null);
 
   const loadStores = async () => {
     try {
@@ -67,7 +40,6 @@ export default function ExploreStoresPage() {
     } catch (err) {
       console.error(err);
       setError("No se pudieron cargar los negocios.");
-      setStores([]);
     } finally {
       setLoading(false);
     }
@@ -75,243 +47,255 @@ export default function ExploreStoresPage() {
 
   useEffect(() => {
     loadStores();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters.comuna, filters.tipoNegocio, filters.mode]);
 
-  const onChangeFilter = (e) => {
+  const handleFilterChange = (e) => {
     const { name, value } = e.target;
     setFilters((prev) => ({ ...prev, [name]: value }));
   };
 
-  const onApplyFilters = (e) => {
-    e.preventDefault();
-    loadStores();
+  const handleFocusOnStore = (store) => {
+    if (!store.lat || !store.lng) return;
+    setSelectedStoreId(store._id);
+    setMapCenter([store.lat, store.lng]);
+    setMapZoom(16);
   };
 
-  const center = [-33.4372, -70.6506]; // Santiago
+  const handleOpenProfile = (storeId) => {
+    navigate(`/tienda/${storeId}`);
+  };
+
+  const comunasOptions = useMemo(() => {
+    const set = new Set();
+    stores.forEach((s) => s.comuna && set.add(s.comuna));
+    return Array.from(set);
+  }, [stores]);
+
+  const tiposOptions = useMemo(() => {
+    const set = new Set();
+    stores.forEach((s) => s.tipoNegocio && set.add(s.tipoNegocio));
+    return Array.from(set);
+  }, [stores]);
 
   return (
-    <div className="min-h-screen bg-slate-100 flex flex-col">
+    <div
+  className="min-h-screen flex flex-col"
+  style={{
+    background: "linear-gradient(to bottom, #e1c0f6 0%, #ffffff 80%)",
+  }}
+>
+
       <MainHeader subtitle="Explora negocios dentro de la plataforma" />
 
-      <main className="flex-1 max-w-6xl mx-auto px-4 py-6 grid gap-4 md:grid-cols-[260px,minmax(0,1.5fr),minmax(0,1.2fr)]">
-        {/* Filtros */}
-        <aside className="bg-white border rounded-2xl shadow-sm p-4 space-y-4">
-          <h2 className="text-base font-semibold text-slate-800">Filtros</h2>
-          <form onSubmit={onApplyFilters} className="space-y-3 text-sm">
-            <div>
-              <label className="block mb-1 text-slate-600">Comuna</label>
-              <select
-                name="comuna"
-                value={filters.comuna}
-                onChange={onChangeFilter}
-                className="w-full border rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-              >
-                {comunasMock.map((c) => (
-                  <option key={c || "todas"} value={c}>
-                    {c || "Todas"}
-                  </option>
-                ))}
-              </select>
-            </div>
+      <main className="flex-1 w-full px-2 md:px-4 py-4">
+        {/* Contenedor amplio */}
+        <div className="mx-auto w-full max-w-7xl lg:max-w-6xl xl:max-w-7xl space-y-4">
+          {/* Grid principal: filtros / mapa ancho / lista */}
+          <div className="grid gap-4 lg:grid-cols-[260px,minmax(0,2.5fr),320px]">
+            {/* Filtros a la izquierda */}
+            <aside className="bg-white border rounded-2xl p-4 shadow-sm h-fit">
+              <h2 className="text-base font-semibold text-slate-800 mb-3">
+                Filtros
+              </h2>
 
-            <div>
-              <label className="block mb-1 text-slate-600">Tipo de negocio</label>
-              <select
-                name="tipoNegocio"
-                value={filters.tipoNegocio}
-                onChange={onChangeFilter}
-                className="w-full border rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-              >
-                {tiposMock.map((t) => (
-                  <option key={t || "todos"} value={t}>
-                    {t || "Todos"}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block mb-1 text-slate-600">Tipo de operación</label>
-              <select
-                name="mode"
-                value={filters.mode}
-                onChange={onChangeFilter}
-                className="w-full border rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-              >
-                {modesMock.map((m) => (
-                  <option key={m.value} value={m.value}>
-                    {m.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <button
-              type="submit"
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg px-3 py-2"
-            >
-              Aplicar filtros
-            </button>
-          </form>
-        </aside>
-
-        {/* Mapa */}
-        <section className="bg-white border rounded-2xl shadow-sm p-4 flex flex-col">
-          <h2 className="text-base font-semibold text-slate-800 mb-1">
-            Mapa de negocios
-          </h2>
-          <p className="text-xs text-slate-500 mb-3">
-            Visualiza los negocios registrados en Vitrinex.
-          </p>
-
-          <div className="flex-1 overflow-hidden rounded-xl border">
-            <MapContainer
-              ref={mapRef}
-              center={center}
-              zoom={13}
-              style={{ width: "100%", height: "100%" }}
-            >
-              <TileLayer
-                attribution='&copy; OpenStreetMap contributors'
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              />
-
-              <FlyToStore selectedStore={selectedStore} />
-
-              {stores.map((store) =>
-                store.lat && store.lng ? (
-                  <Marker
-                    key={store._id}
-                    position={[store.lat, store.lng]}
-                    eventHandlers={{
-                      click: () => navigate(`/tienda/${store._id}`),
-                    }}
+              <div className="space-y-3 text-sm">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">
+                    Comuna
+                  </label>
+                  <select
+                    name="comuna"
+                    value={filters.comuna}
+                    onChange={handleFilterChange}
+                    className="w-full border rounded-lg px-2 py-1.5 text-sm"
                   >
-                    <Popup>
-                      <div className="text-xs">
-                        <strong>{store.name}</strong>
-                        <br />
-                        {store.tipoNegocio || "Negocio"} ·{" "}
-                        {store.comuna || "Sin comuna"}
-                        {store.ownerName && (
-                          <>
-                            <br />
-                            <span className="text-slate-600">
-                              Dueño:{" "}
-                              <span className="font-medium">
-                                {store.ownerName}
-                              </span>
-                            </span>
-                          </>
-                        )}
-                        {store.direccion && (
-                          <>
-                            <br />
-                            <span>{store.direccion}</span>
-                          </>
-                        )}
-                        <br />
-                        <button
-                          onClick={() => navigate(`/tienda/${store._id}`)}
-                          className="mt-1 text-[11px] text-blue-600 hover:underline"
-                        >
-                          Ver perfil
-                        </button>
-                      </div>
-                    </Popup>
-                  </Marker>
-                ) : null
-              )}
-            </MapContainer>
-          </div>
-        </section>
+                    <option value="">Todas</option>
+                    {comunasOptions.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-        {/* Listado de negocios */}
-        <section className="bg-white border rounded-2xl shadow-sm p-4 flex flex-col">
-          <div className="flex items-baseline justify-between mb-2">
-            <h2 className="text-base font-semibold text-slate-800">
-              Negocios encontrados
-            </h2>
-            <span className="text-xs text-slate-500">
-              {stores.length} negocio(s) encontrados
-            </span>
-          </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">
+                    Tipo de negocio
+                  </label>
+                  <select
+                    name="tipoNegocio"
+                    value={filters.tipoNegocio}
+                    onChange={handleFilterChange}
+                    className="w-full border rounded-lg px-2 py-1.5 text-sm"
+                  >
+                    <option value="">Todos</option>
+                    {tiposOptions.map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-          {error && <p className="text-xs text-red-600 mb-2">{error}</p>}
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">
+                    Tipo de operación
+                  </label>
+                  <select
+                    name="mode"
+                    value={filters.mode}
+                    onChange={handleFilterChange}
+                    className="w-full border rounded-lg px-2 py-1.5 text-sm"
+                  >
+                    <option value="">Todos</option>
+                    <option value="products">Venta de productos</option>
+                    <option value="bookings">Agendamiento de citas</option>
+                  </select>
+                </div>
 
-          {loading ? (
-            <p className="text-xs text-slate-500">Cargando negocios…</p>
-          ) : stores.length === 0 ? (
-            <p className="text-xs text-slate-500">
-              No se encontraron negocios con los filtros actuales.
-            </p>
-          ) : (
-            <div className="mt-2 space-y-2 overflow-auto">
-              {stores.map((store) => (
-                <article
-                  key={store._id}
-                  className="border rounded-xl px-3 py-2 text-sm hover:bg-slate-50 transition cursor-pointer"
+                <button
+                  type="button"
+                  onClick={loadStores}
+                  className="w-full mt-1 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-3 py-2 rounded-lg"
                 >
-                  <div className="flex items-start gap-3">
-                    {store.logoUrl ? (
-                      <img
-                        src={store.logoUrl}
-                        alt={store.name}
-                        className="h-10 w-10 rounded-full object-cover border flex-shrink-0"
-                      />
-                    ) : (
-                      <div className="h-10 w-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-600 text-xs font-semibold flex-shrink-0">
-                        {store.name?.[0]?.toUpperCase() || "N"}
-                      </div>
-                    )}
+                  Aplicar filtros
+                </button>
+              </div>
+            </aside>
 
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2">
-                        <h3 className="font-semibold text-slate-800 text-sm truncate">
+            {/* Mapa MUCHO más ancho en el centro */}
+            <section className="bg-white border rounded-2xl shadow-sm overflow-hidden">
+              <div className="border-b px-4 py-2">
+                <h2 className="text-base font-semibold text-slate-800">
+                  Mapa de negocios
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Visualiza los negocios registrados en Vitrinex.
+                </p>
+              </div>
+
+              <div className="h-[420px] md:h-[480px] lg:h-[520px]">
+                <MapContainer
+                  key={`${mapCenter[0]}-${mapCenter[1]}-${mapZoom}`}
+                  center={mapCenter}
+                  zoom={mapZoom}
+                  scrollWheelZoom={true}
+                  className="h-full w-full"
+                >
+                  <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                  {stores
+                    .filter((s) => s.lat && s.lng)
+                    .map((store) => (
+                      <Marker
+                        key={store._id}
+                        position={[store.lat, store.lng]}
+                        eventHandlers={{
+                          click: () => handleFocusOnStore(store),
+                        }}
+                      >
+                        <Popup>
+                          <div className="text-xs">
+                            <div className="font-semibold mb-1">
+                              {store.name}
+                            </div>
+                            {store.comuna && (
+                              <div className="text-slate-600 mb-1">
+                                {store.comuna}
+                              </div>
+                            )}
+                            <button
+                              className="text-blue-600 underline text-[11px]"
+                              onClick={() => handleOpenProfile(store._id)}
+                            >
+                              Ver perfil
+                            </button>
+                          </div>
+                        </Popup>
+                      </Marker>
+                    ))}
+                </MapContainer>
+              </div>
+            </section>
+
+            {/* Lista de negocios a la derecha */}
+            <aside className="bg-white border rounded-2xl p-4 shadow-sm h-[420px] md:h-[480px] lg:h-[520px] flex flex-col">
+              <div className="mb-2">
+                <h2 className="text-base font-semibold text-slate-800">
+                  Negocios encontrados
+                </h2>
+                <p className="text-xs text-slate-500">
+                  {loading
+                    ? "Cargando negocios…"
+                    : `${stores.length} negocio(s) encontrados`}
+                </p>
+              </div>
+
+              {error && (
+                <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-2 py-1 mb-2">
+                  {error}
+                </p>
+              )}
+
+              <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+                {!loading && stores.length === 0 && !error && (
+                  <p className="text-xs text-slate-500">
+                    No se encontraron negocios con esos filtros.
+                  </p>
+                )}
+
+                {stores.map((store) => (
+                  <article
+                    key={store._id}
+                    className={`border rounded-xl px-3 py-2 text-xs cursor-pointer transition-colors ${
+                      selectedStoreId === store._id
+                        ? "border-blue-500 bg-blue-50/60"
+                        : "border-slate-200 hover:border-blue-300 hover:bg-slate-50"
+                    }`}
+                    onClick={() => handleFocusOnStore(store)}
+                  >
+                    <div className="flex justify-between items-start gap-2">
+                      <div>
+                        <h3 className="font-semibold text-slate-800 text-sm">
                           {store.name}
                         </h3>
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 uppercase">
-                          {store.mode === "bookings"
-                            ? "Agendamiento"
-                            : "Productos"}
-                        </span>
-                      </div>
-
-                      <p className="text-xs text-slate-500">
-                        {store.comuna || "Sin comuna"} ·{" "}
-                        {store.tipoNegocio || "Tipo no especificado"}
-                      </p>
-
-                      {store.ownerName && (
-                        <p className="text-xs text-slate-500 mt-0.5">
-                          Dueño:{" "}
-                          <span className="font-medium text-slate-700">
-                            {store.ownerName}
-                          </span>
+                        <p className="text-[11px] text-slate-500">
+                          {store.tipoNegocio || "Sin categoría"}{" "}
+                          {store.comuna ? `· ${store.comuna}` : ""}
                         </p>
-                      )}
-
-                      <div className="flex gap-2 mt-2">
-                        <button
-                          onClick={() => setSelectedStore(store)}
-                          className="text-xs text-blue-600 hover:underline"
-                        >
-                          Ver en mapa
-                        </button>
-                        <button
-                          onClick={() => navigate(`/tienda/${store._id}`)}
-                          className="text-xs text-slate-600 hover:text-blue-700"
-                        >
-                          Ir al perfil →
-                        </button>
                       </div>
                     </div>
-                  </div>
-                </article>
-              ))}
-            </div>
-          )}
-        </section>
+
+                    {store.direccion && (
+                      <p className="text-[11px] text-slate-500 mt-1 line-clamp-2">
+                        {store.direccion}
+                      </p>
+                    )}
+
+                    <div className="flex justify-between items-center mt-2">
+                      <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600">
+                        {store.mode === "bookings"
+                          ? "Agendamiento de citas"
+                          : "Venta de productos"}
+                      </span>
+
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenProfile(store._id);
+                        }}
+                        className="text-[11px] text-blue-600 hover:underline"
+                      >
+                        Ver perfil
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </aside>
+          </div>
+        </div>
       </main>
     </div>
   );
