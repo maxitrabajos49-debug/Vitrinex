@@ -1,9 +1,23 @@
 // frontend/src/components/SmartInsights.jsx
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   fetchProductInsights,
   fetchBookingInsights,
 } from "../api/insights";
+
+const formatCurrency = (value) => {
+  if (typeof value !== "number" || Number.isNaN(value)) return "$0";
+  return new Intl.NumberFormat("es-CL", {
+    style: "currency",
+    currency: "CLP",
+    maximumFractionDigits: 0,
+  }).format(value);
+};
+
+const formatNumber = (value) => {
+  if (typeof value !== "number" || Number.isNaN(value)) return "0";
+  return value.toLocaleString("es-CL");
+};
 
 export default function SmartInsights({ storeId, mode }) {
   const [loading, setLoading] = useState(true);
@@ -53,7 +67,41 @@ export default function SmartInsights({ storeId, mode }) {
 
   if (!data) return null;
 
-  const { summary, suggestions } = data;
+  const { summary = {}, suggestions = [] } = data;
+
+  const normalizedSummary = useMemo(() => {
+    if (!summary || typeof summary !== "object") return {};
+    return {
+      ...summary,
+      totalOrders:
+        summary.totalOrders ?? summary.orders ?? summary.total ?? 0,
+      totalItemsSold:
+        summary.totalItemsSold ?? summary.itemsSold ?? summary.units ?? 0,
+      totalRevenue:
+        summary.totalRevenue ?? summary.revenue ?? summary.totalSales ?? 0,
+      averageOrderValue:
+        summary.averageOrderValue ?? summary.averageTicket ?? summary.ticket ?? 0,
+      uniqueProducts:
+        summary.uniqueProducts ?? summary.totalProducts ?? summary.products ?? 0,
+      totalProducts:
+        summary.totalProducts ?? summary.uniqueProducts ?? summary.products ?? 0,
+      totalAppointments:
+        summary.totalAppointments ?? summary.totalBookings ?? summary.totalCitas ?? 0,
+      confirmed: summary.confirmed ?? summary.completed ?? summary.approved ?? 0,
+      cancelled: summary.cancelled ?? summary.canceled ?? 0,
+      completionRate:
+        summary.completionRate ?? summary.confirmationRate ?? summary.successRate ?? 0,
+      windowInDays: summary.windowInDays ?? summary.days ?? null,
+    };
+  }, [summary]);
+
+  const summaryWindowLabel = useMemo(() => {
+    if (!normalizedSummary?.windowInDays) return null;
+    if (normalizedSummary.windowInDays === 1) return "Últimas 24h";
+    if (normalizedSummary.windowInDays === 7) return "Últimos 7 días";
+    if (normalizedSummary.windowInDays === 30) return "Últimos 30 días";
+    return `Últimos ${normalizedSummary.windowInDays} días`;
+  }, [normalizedSummary?.windowInDays]);
 
   return (
     <section className="bg-white/95 border rounded-2xl p-5 shadow-sm space-y-4">
@@ -67,35 +115,42 @@ export default function SmartInsights({ storeId, mode }) {
           </p>
         </div>
 
-        <span className="inline-flex items-center px-2 py-1 text-[11px] rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">
-          {mode === "bookings"
-            ? "Agendamiento y servicios"
-            : "Productos e inventario"}
-        </span>
+        <div className="flex items-center gap-2">
+          {summaryWindowLabel && (
+            <span className="inline-flex items-center px-2 py-1 text-[11px] rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+              {summaryWindowLabel}
+            </span>
+          )}
+          <span className="inline-flex items-center px-2 py-1 text-[11px] rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">
+            {mode === "bookings"
+              ? "Agendamiento y servicios"
+              : "Productos e inventario"}
+          </span>
+        </div>
       </div>
 
       {/* RESUMEN PRINCIPAL */}
       {mode === "products" && (
-        <div className="grid gap-3 md:grid-cols-4 text-xs">
+        <div className="grid gap-3 md:grid-cols-5 text-xs">
           <MetricCard
             label="Pedidos en el período"
-            value={summary?.totalOrders ?? 0}
+            value={formatNumber(normalizedSummary?.totalOrders ?? 0)}
           />
           <MetricCard
             label="Unidades vendidas"
-            value={summary?.totalItemsSold ?? 0}
+            value={formatNumber(normalizedSummary?.totalItemsSold ?? 0)}
           />
           <MetricCard
             label="Ingresos estimados"
-            value={
-              summary?.totalRevenue
-                ? `$${summary.totalRevenue.toLocaleString("es-CL")}`
-                : "$0"
-            }
+            value={formatCurrency(normalizedSummary?.totalRevenue ?? 0)}
+          />
+          <MetricCard
+            label="Ticket promedio"
+            value={formatCurrency(normalizedSummary?.averageOrderValue ?? 0)}
           />
           <MetricCard
             label="Productos distintos vendidos"
-            value={summary?.uniqueProducts ?? 0}
+            value={formatNumber(normalizedSummary?.uniqueProducts ?? 0)}
           />
         </div>
       )}
@@ -104,13 +159,19 @@ export default function SmartInsights({ storeId, mode }) {
         <div className="grid gap-3 md:grid-cols-4 text-xs">
           <MetricCard
             label="Citas totales"
-            value={summary?.totalAppointments ?? 0}
+            value={formatNumber(normalizedSummary?.totalAppointments ?? 0)}
           />
-          <MetricCard label="Confirmadas" value={summary?.confirmed ?? 0} />
-          <MetricCard label="Canceladas" value={summary?.cancelled ?? 0} />
+          <MetricCard
+            label="Confirmadas"
+            value={formatNumber(normalizedSummary?.confirmed ?? 0)}
+          />
+          <MetricCard
+            label="Canceladas"
+            value={formatNumber(normalizedSummary?.cancelled ?? 0)}
+          />
           <MetricCard
             label="Tasa de cumplimiento"
-            value={`${summary?.completionRate ?? 0}%`}
+            value={`${normalizedSummary?.completionRate ?? 0}%`}
           />
         </div>
       )}
@@ -149,7 +210,48 @@ function MetricCard({ label, value }) {
 }
 
 function ProductsDetail({ data }) {
-  const { topProducts = [], lowProducts = [], inventoryAlerts = [] } = data;
+  const topProducts = useMemo(() => {
+    if (Array.isArray(data?.topProducts) && data.topProducts.length)
+      return data.topProducts;
+    if (Array.isArray(data?.bestSellers) && data.bestSellers.length)
+      return data.bestSellers.map((item) => ({
+        productId: item.id,
+        name: item.name,
+        totalSold: item.sold ?? 0,
+        totalRevenue: item.revenue ?? 0,
+        price: item.price ?? null,
+        stock: item.stock ?? null,
+      }));
+    return [];
+  }, [data]);
+
+  const lowProducts = useMemo(() => {
+    if (Array.isArray(data?.lowProducts) && data.lowProducts.length)
+      return data.lowProducts;
+    if (Array.isArray(data?.slowMovers) && data.slowMovers.length)
+      return data.slowMovers.map((item) => ({
+        productId: item.id,
+        name: item.name,
+        totalSold: item.sold ?? 0,
+        totalRevenue: item.revenue ?? 0,
+        price: item.price ?? null,
+        stock: item.stock ?? null,
+      }));
+    return [];
+  }, [data]);
+
+  const inventoryAlerts = useMemo(() => {
+    if (Array.isArray(data?.inventoryAlerts) && data.inventoryAlerts.length)
+      return data.inventoryAlerts;
+    if (Array.isArray(data?.lowStock) && data.lowStock.length)
+      return data.lowStock.map((item) => ({
+        level: "warning",
+        message: `Stock crítico en "${item.name}" (quedan ${formatNumber(
+          item.stock ?? 0
+        )} uds.).`,
+      }));
+    return [];
+  }, [data]);
 
   return (
     <div className="grid gap-4 md:grid-cols-3 text-xs">
@@ -168,7 +270,13 @@ function ProductsDetail({ data }) {
               className="flex justify-between items-center border rounded-lg px-2 py-1 bg-slate-50"
             >
               <span className="truncate max-w-[130px]">{p.name}</span>
-              <span className="font-semibold">{p.totalSold} uds.</span>
+              <span className="font-semibold text-right">
+                {formatNumber(p.totalSold)} uds.
+                <br />
+                <span className="text-[11px] text-slate-500">
+                  {formatCurrency(p.totalRevenue ?? 0)}
+                </span>
+              </span>
             </li>
           ))}
         </ul>
@@ -192,7 +300,9 @@ function ProductsDetail({ data }) {
               className="flex justify-between items-center border rounded-lg px-2 py-1 bg-slate-50"
             >
               <span className="truncate max-w-[130px]">{p.name}</span>
-              <span className="font-semibold">{p.totalSold} uds.</span>
+              <span className="font-semibold">
+                {formatNumber(p.totalSold)} uds.
+              </span>
             </li>
           ))}
         </ul>
@@ -228,7 +338,28 @@ function ProductsDetail({ data }) {
 }
 
 function BookingsDetail({ data }) {
-  const { busySlots = [], services = [] } = data;
+  const busySlots = useMemo(() => {
+    if (Array.isArray(data?.busySlots) && data.busySlots.length)
+      return data.busySlots;
+    if (Array.isArray(data?.peakHours) && data.peakHours.length)
+      return data.peakHours;
+    return [];
+  }, [data]);
+
+  const services = useMemo(() => {
+    if (Array.isArray(data?.services) && data.services.length)
+      return data.services.map((service) => ({
+        ...service,
+        total: service.total ?? service.count ?? 0,
+        name: service.name ?? service.service ?? "Servicio",
+      }));
+    if (Array.isArray(data?.popularServices) && data.popularServices.length)
+      return data.popularServices.map((service, idx) => ({
+        name: service.name ?? service.service ?? `Servicio ${idx + 1}`,
+        total: service.total ?? service.count ?? 0,
+      }));
+    return [];
+  }, [data]);
 
   return (
     <div className="grid gap-4 md:grid-cols-2 text-xs">
@@ -260,29 +391,30 @@ function BookingsDetail({ data }) {
         <h3 className="font-semibold text-slate-800 mb-1 text-sm">
           Servicios más solicitados
         </h3>
-        {services.length === 0 && (
+        {services.length === 0 ? (
           <p className="text-slate-500">
             Aún no hay servicios suficientes en el período seleccionado.
           </p>
+        ) : (
+          <ul className="space-y-1">
+            {services.map((s, idx) => (
+              <li
+                key={s.name || s.service || idx}
+                className="flex justify-between items-center border rounded-lg px-2 py-1 bg-slate-50"
+              >
+                <div className="flex flex-col">
+                  <span className="font-medium">{s.name || s.service}</span>
+                  {typeof s.avgRating === "number" && (
+                    <span className="text-[11px] text-slate-500">
+                      Satisfacción promedio: {s.avgRating.toFixed(1)} / 5
+                    </span>
+                  )}
+                </div>
+                <span className="font-semibold">{formatNumber(s.total ?? 0)} citas</span>
+              </li>
+            ))}
+          </ul>
         )}
-        <ul className="space-y-1">
-          {services.map((s) => (
-            <li
-              key={s.name}
-              className="flex justify-between items-center border rounded-lg px-2 py-1 bg-slate-50"
-            >
-              <div className="flex flex-col">
-                <span className="font-medium">{s.name}</span>
-                {s.avgRating && (
-                  <span className="text-[11px] text-slate-500">
-                    Satisfacción promedio: {s.avgRating.toFixed(1)} / 5
-                  </span>
-                )}
-              </div>
-              <span className="font-semibold">{s.total} citas</span>
-            </li>
-          ))}
-        </ul>
       </div>
     </div>
   );
