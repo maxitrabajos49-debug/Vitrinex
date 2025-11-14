@@ -19,29 +19,11 @@ const buildSinceDate = (days) => {
   return since;
 };
 
-let currencyFormatter;
-try {
-  currencyFormatter = new Intl.NumberFormat("es-CL", {
-    style: "currency",
-    currency: "CLP",
-    maximumFractionDigits: 0,
-  });
-} catch (err) {
-  currencyFormatter = new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 0,
-  });
-}
-
-const formatCurrency = (value) => {
-  if (typeof value !== "number" || Number.isNaN(value)) return "$0";
-  try {
-    return currencyFormatter.format(value);
-  } catch (err) {
-    return `$${Math.round(value).toLocaleString("es-CL")}`;
-  }
-};
+const currencyFormatter = new Intl.NumberFormat("es-CL", {
+  style: "currency",
+  currency: "CLP",
+  maximumFractionDigits: 0,
+});
 
 // ---------------------------------------------------------------------
 // 📦 INSIGHTS PARA VENTA DE PRODUCTOS
@@ -155,33 +137,13 @@ export const getProductInsightsForStore = async (req, res) => {
     }
 
     const suggestions = [];
-    const suggestionsByCategory = {
-      inventory: [],
-      marketing: [],
-      pricing: [],
-    };
-
-    const pushSuggestion = (message, category = "marketing") => {
-      if (!message) return;
-      suggestions.push(message);
-      if (suggestionsByCategory[category]) {
-        suggestionsByCategory[category].push(message);
-      }
-    };
 
     if (!orders.length) {
-      pushSuggestion(
+      suggestions.push(
         `Aún no registras ventas en los últimos ${windowInDays} días. Comparte tu tienda ${
           store.name ? `"${store.name}"` : ""
-        } en redes sociales o con tus clientes frecuentes para activar las primeras compras.`,
-        "marketing"
+        } en redes sociales o con tus clientes frecuentes para activar las primeras compras.`
       );
-      if (store?.tipoNegocio) {
-        pushSuggestion(
-          `Crea una publicación mostrando tus ${store.tipoNegocio.toLowerCase()} estrella y enlaza la tienda para agendar pedidos rápidos.`,
-          "marketing"
-        );
-      }
     }
 
     if (topProducts.length) {
@@ -189,11 +151,10 @@ export const getProductInsightsForStore = async (req, res) => {
       const share = totalItemsSold
         ? Math.round((best.totalSold / totalItemsSold) * 100)
         : 0;
-      pushSuggestion(
-        `"${best.name}" concentra ${share}% de las unidades vendidas. Destaca este producto en la portada y considera armar bundles para subir el ticket promedio (${formatCurrency(
+      suggestions.push(
+        `"${best.name}" concentra ${share}% de las unidades vendidas. Destaca este producto en la portada y considera armar bundles para subir el ticket promedio (${currencyFormatter.format(
           best.totalRevenue
-        )}).`,
-        "marketing"
+        )}).`
       );
     }
 
@@ -202,9 +163,8 @@ export const getProductInsightsForStore = async (req, res) => {
       .map((p) => p.name)
       .slice(0, 3);
     if (lowPerformers.length) {
-      pushSuggestion(
-        `Los productos ${lowPerformers.join(", ")} no han salido en este período. Prueba cambiar sus fotos, ajustar precio o incluirlos en promociones relámpago.`,
-        "pricing"
+      suggestions.push(
+        `Los productos ${lowPerformers.join(", ")} no han salido en este período. Prueba cambiar sus fotos, ajustar precio o incluirlos en promociones relámpago.`
       );
     }
 
@@ -213,9 +173,8 @@ export const getProductInsightsForStore = async (req, res) => {
       .map((a) => a.message.match(/"(.+?)"/)?.[1])
       .filter(Boolean);
     if (criticalStock.length) {
-      pushSuggestion(
-        `Reabastece cuanto antes ${criticalStock.join(", ")}, porque podrían quedarse sin stock si mantienen la misma demanda.`,
-        "inventory"
+      suggestions.push(
+        `Reabastece cuanto antes ${criticalStock.join(", ")}, porque podrían quedarse sin stock si mantienen la misma demanda.`
       );
     }
 
@@ -223,23 +182,10 @@ export const getProductInsightsForStore = async (req, res) => {
       ? totalRevenue / orders.length
       : 0;
     if (averageOrderValue && totalItemsSold > orders.length) {
-      pushSuggestion(
-        `El ticket promedio está en ${formatCurrency(
+      suggestions.push(
+        `El ticket promedio está en ${currencyFormatter.format(
           averageOrderValue
-        )}. Ofrece envíos gratis sobre ese monto o paquetes de productos para impulsar compras mayores.`,
-        "pricing"
-      );
-    }
-
-    const dormantStock = stats.filter(
-      (product) => product.totalSold === 0 && (product.stock ?? 0) > 0
-    );
-    if (dormantStock.length) {
-      pushSuggestion(
-        `Hay ${dormantStock.length} productos con stock disponible que no vendieron. Considera incluirlos en packs o recomendaciones automáticas después de comprar "${
-          topProducts[0]?.name || "tu producto estrella"
-        }".`,
-        "marketing"
+        )}. Ofrece envíos gratis sobre ese monto o paquetes de productos para impulsar compras mayores.`
       );
     }
 
@@ -250,41 +196,7 @@ export const getProductInsightsForStore = async (req, res) => {
       uniqueProducts: salesByProduct.size,
       windowInDays,
       averageOrderValue,
-      totalProducts: products.length,
     };
-
-    const lowStockThreshold = 3;
-    const lowStockLegacy = stats
-      .filter(
-        (product) =>
-          typeof product.stock === "number" && product.stock <= lowStockThreshold
-      )
-      .map((product) => ({
-        id: product.productId,
-        name: product.name,
-        stock: product.stock,
-        sold: product.totalSold,
-        revenue: product.totalRevenue,
-        price: product.price,
-      }));
-
-    const bestSellers = topProducts.map((product) => ({
-      id: product.productId,
-      name: product.name,
-      price: product.price,
-      stock: product.stock,
-      sold: product.totalSold,
-      revenue: product.totalRevenue,
-    }));
-
-    const slowMovers = lowProducts.map((product) => ({
-      id: product.productId,
-      name: product.name,
-      price: product.price,
-      stock: product.stock,
-      sold: product.totalSold,
-      revenue: product.totalRevenue,
-    }));
 
     res.json({
       ok: true,
@@ -293,10 +205,6 @@ export const getProductInsightsForStore = async (req, res) => {
       lowProducts,
       inventoryAlerts,
       suggestions,
-      suggestionsByCategory,
-      bestSellers,
-      slowMovers,
-      lowStock: lowStockLegacy,
     });
   } catch (err) {
     console.error("Error en getProductInsightsForStore:", err);
@@ -373,29 +281,15 @@ export const getBookingInsightsForStore = async (req, res) => {
       .sort((a, b) => b.count - a.count)
       .slice(0, 5);
 
-    const servicesByName = new Map();
     const services = [];
 
     const suggestions = [];
-    const suggestionsByCategory = {
-      schedule: [],
-      marketing: [],
-    };
-
-    const pushSuggestion = (message, category = "marketing") => {
-      if (!message) return;
-      suggestions.push(message);
-      if (suggestionsByCategory[category]) {
-        suggestionsByCategory[category].push(message);
-      }
-    };
 
     if (busySlots.length) {
-      pushSuggestion(
+      suggestions.push(
         `Tus horarios más solicitados son ${busySlots
           .map((slot) => slot.hour)
-          .join(", ")}. Refuerza la disponibilidad en esos tramos o considera subir el precio premium para ellos.`,
-        "schedule"
+          .join(", ")}. Refuerza la disponibilidad en esos tramos o considera subir el precio premium para ellos.`
       );
     }
 
@@ -404,59 +298,22 @@ export const getBookingInsightsForStore = async (req, res) => {
       .sort((a, b) => a.count - b.count)
       .slice(0, 3);
     if (quietSlots.length) {
-      pushSuggestion(
+      suggestions.push(
         `Bloques con menos reservas: ${quietSlots
           .map((slot) => slot.hour)
-          .join(", ")}. Envía recordatorios a tus clientes o arma promociones específicas para mover esos horarios.`,
-        "schedule"
+          .join(", ")}. Envía recordatorios a tus clientes o arma promociones específicas para mover esos horarios.`
       );
     }
 
     if (cancelled > 0) {
-      pushSuggestion(
-        `Registraste ${cancelled} cancelaciones en ${windowInDays} días. Contacta a los clientes para entender las razones y ajusta tu política de confirmación si es necesario.`,
-        "marketing"
+      suggestions.push(
+        `Registraste ${cancelled} cancelaciones en ${windowInDays} días. Contacta a los clientes para entender las razones y ajusta tu política de confirmación si es necesario.`
       );
     }
 
     if (completionRate < 60 && totalAppointments >= 5) {
-      pushSuggestion(
-        `Tu tasa de confirmación es del ${completionRate}%. Envía recordatorios automáticos 24 horas antes y ofrece confirmación vía WhatsApp para reducir ausencias.`,
-        "marketing"
-      );
-    }
-
-    for (const booking of bookings) {
-      const rawName =
-        booking.serviceName ||
-        booking.service ||
-        booking.taskTitle ||
-        booking.serviceId ||
-        "Servicio";
-
-      const name =
-        typeof rawName === "string" && rawName.trim()
-          ? rawName.trim()
-          : "Servicio";
-
-      const entry = servicesByName.get(name) || {
-        name,
-        total: 0,
-      };
-      entry.total += 1;
-      servicesByName.set(name, entry);
-    }
-
-    for (const entry of servicesByName.values()) {
-      services.push(entry);
-    }
-
-    services.sort((a, b) => b.total - a.total);
-
-    if (services.length && store?.tipoNegocio) {
-      pushSuggestion(
-        `Promociona tu servicio más reservado (${services[0].name}) junto a testimonios de clientes de ${store.tipoNegocio.toLowerCase()}.`,
-        "marketing"
+      suggestions.push(
+        `Tu tasa de confirmación es del ${completionRate}%. Envía recordatorios automáticos 24 horas antes y ofrece confirmación vía WhatsApp para reducir ausencias.`
       );
     }
 
@@ -466,21 +323,13 @@ export const getBookingInsightsForStore = async (req, res) => {
       cancelled,
       completionRate,
       windowInDays,
-      totalBookings: totalAppointments,
-      completed: confirmed,
     };
 
     res.json({
       ok: true,
       summary,
       busySlots,
-      peakHours: busySlots,
-      lowDemandSlots: quietSlots,
       services,
-      popularServices: services.map((service) => ({
-        service: service.name,
-        count: service.total,
-      })),
       suggestions,
       suggestionsByCategory,
       quietSlots,

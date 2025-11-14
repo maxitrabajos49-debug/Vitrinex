@@ -69,39 +69,13 @@ export default function SmartInsights({ storeId, mode }) {
 
   const { summary = {}, suggestions = [] } = data;
 
-  const normalizedSummary = useMemo(() => {
-    if (!summary || typeof summary !== "object") return {};
-    return {
-      ...summary,
-      totalOrders:
-        summary.totalOrders ?? summary.orders ?? summary.total ?? 0,
-      totalItemsSold:
-        summary.totalItemsSold ?? summary.itemsSold ?? summary.units ?? 0,
-      totalRevenue:
-        summary.totalRevenue ?? summary.revenue ?? summary.totalSales ?? 0,
-      averageOrderValue:
-        summary.averageOrderValue ?? summary.averageTicket ?? summary.ticket ?? 0,
-      uniqueProducts:
-        summary.uniqueProducts ?? summary.totalProducts ?? summary.products ?? 0,
-      totalProducts:
-        summary.totalProducts ?? summary.uniqueProducts ?? summary.products ?? 0,
-      totalAppointments:
-        summary.totalAppointments ?? summary.totalBookings ?? summary.totalCitas ?? 0,
-      confirmed: summary.confirmed ?? summary.completed ?? summary.approved ?? 0,
-      cancelled: summary.cancelled ?? summary.canceled ?? 0,
-      completionRate:
-        summary.completionRate ?? summary.confirmationRate ?? summary.successRate ?? 0,
-      windowInDays: summary.windowInDays ?? summary.days ?? null,
-    };
-  }, [summary]);
-
   const summaryWindowLabel = useMemo(() => {
-    if (!normalizedSummary?.windowInDays) return null;
-    if (normalizedSummary.windowInDays === 1) return "Últimas 24h";
-    if (normalizedSummary.windowInDays === 7) return "Últimos 7 días";
-    if (normalizedSummary.windowInDays === 30) return "Últimos 30 días";
-    return `Últimos ${normalizedSummary.windowInDays} días`;
-  }, [normalizedSummary?.windowInDays]);
+    if (!summary?.windowInDays) return null;
+    if (summary.windowInDays === 1) return "Últimas 24h";
+    if (summary.windowInDays === 7) return "Últimos 7 días";
+    if (summary.windowInDays === 30) return "Últimos 30 días";
+    return `Últimos ${summary.windowInDays} días`;
+  }, [summary?.windowInDays]);
 
   return (
     <section className="bg-white/95 border rounded-2xl p-5 shadow-sm space-y-4">
@@ -134,23 +108,23 @@ export default function SmartInsights({ storeId, mode }) {
         <div className="grid gap-3 md:grid-cols-5 text-xs">
           <MetricCard
             label="Pedidos en el período"
-            value={formatNumber(normalizedSummary?.totalOrders ?? 0)}
+            value={formatNumber(summary?.totalOrders ?? 0)}
           />
           <MetricCard
             label="Unidades vendidas"
-            value={formatNumber(normalizedSummary?.totalItemsSold ?? 0)}
+            value={formatNumber(summary?.totalItemsSold ?? 0)}
           />
           <MetricCard
             label="Ingresos estimados"
-            value={formatCurrency(normalizedSummary?.totalRevenue ?? 0)}
+            value={formatCurrency(summary?.totalRevenue ?? 0)}
           />
           <MetricCard
             label="Ticket promedio"
-            value={formatCurrency(normalizedSummary?.averageOrderValue ?? 0)}
+            value={formatCurrency(summary?.averageOrderValue ?? 0)}
           />
           <MetricCard
             label="Productos distintos vendidos"
-            value={formatNumber(normalizedSummary?.uniqueProducts ?? 0)}
+            value={formatNumber(summary?.uniqueProducts ?? 0)}
           />
         </div>
       )}
@@ -159,15 +133,15 @@ export default function SmartInsights({ storeId, mode }) {
         <div className="grid gap-3 md:grid-cols-4 text-xs">
           <MetricCard
             label="Citas totales"
-            value={formatNumber(normalizedSummary?.totalAppointments ?? 0)}
+            value={formatNumber(summary?.totalAppointments ?? 0)}
           />
           <MetricCard
             label="Confirmadas"
-            value={formatNumber(normalizedSummary?.confirmed ?? 0)}
+            value={formatNumber(summary?.confirmed ?? 0)}
           />
           <MetricCard
             label="Canceladas"
-            value={formatNumber(normalizedSummary?.cancelled ?? 0)}
+            value={formatNumber(summary?.cancelled ?? 0)}
           />
           <MetricCard
             label="Tasa de cumplimiento"
@@ -410,7 +384,7 @@ function BookingsDetail({ data }) {
                     </span>
                   )}
                 </div>
-                <span className="font-semibold">{formatNumber(s.total ?? 0)} citas</span>
+                <span className="font-semibold">{formatNumber(s.total ?? s.count ?? 0)} citas</span>
               </li>
             ))}
           </ul>
